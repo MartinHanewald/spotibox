@@ -1,5 +1,5 @@
-# König Pups
-album1 = 'spotify:album:7i0L6QBHwQCD9eUTf7QcDH' 
+# Paw Patrol
+album1 = 'spotify:album:0QmmGSZqcqbSdtluqDASF1' 
 # Fünf Freunde
 album2 = 'spotify:album:2TtW4W6HAHWbPcKrQd5x5y'
 # Räuber Hotzenplotz
