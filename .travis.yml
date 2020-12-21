@@ -1,0 +1,17 @@
+language: python
+python:
+- 3.8
+- 3.7
+- 3.6
+install: pip install -U tox-travis
+script: tox
+deploy:
+  provider: pypi
+  distributions: sdist bdist_wheel
+  user: mhanewald
+  password:
+    secure: MI62HkLgHZMDhMI61saA0dIl1T57pHxjQlDtovOo+ryh1n2/PzOXOaBTNrjs/SRs9mK6ZwYJhwaHt5ZR+Fwkz3wHl6dENbxHf+r6H4Zbg91l0z1r5NQpE4p/tiAvTzhzwHmsZXH9D3MaQ5S4S6XFCHqTzwHrkuiHWQJdAIX7rcmv9z+2SPqtM5vAHvbsHQQbxM4WE+o/oBUwU2F6Sh6qRrxI4LUTg7YLmVTXPT2iHFHH95aBBUcHaqKVASlSrB8ugHwIYZWHHIP7p6RHuLIK1ha4hb7pBqVh4lgIatPpHfE7WRPERIhhLQt77bDX+3BZLgZY2Ne2wm14ZEQ98FJAeScMi51+sxeoH6nPXAOZd2Q1u/wACxK7p1DGZ92lLhHWO1jtlsm9hp7amG0GyRTc7D/silnU/xs1xLM0uPZvjcU+M8vIhOff61jW6OTenSOM/zepQePOK6Zt7hdGhlhuCkMStZ3NzktNur63ft9MlKHaG5BX4qhgJcKdtfD58F3Mxq0fezfe0/nX6ARiUbdbA5GS3ji+Hiq/AQLF2k9Qo4tOZy8Lf3LuBxwclXOGrllQUM83Yw7CfB8gwXztZ+YwWQiZwMoRNlmOU3YD19wqaxOmyaKDzDh25dHY/d2qQWK9gEaMM7sle12iVPfD/t3bRRbIF6ukwbc5IPo4hYuNkVM=
+  on:
+    tags: true
+    repo: martinhanewald/spotibox
+    python: 3.7
