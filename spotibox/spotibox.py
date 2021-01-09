@@ -10,6 +10,7 @@ import os.path
 import os
 from spotibox import albums
 from spotipy.exceptions import SpotifyException
+from requests import ReadTimeout
 
 class Spotibox():
     """
@@ -23,48 +24,74 @@ class Spotibox():
 
         target = 'SPOTIBOX'
         scope = "user-read-playback-state,user-modify-playback-state"
-        self.sp = spotipy.Spotify(client_credentials_manager=SpotifyOAuth(
-            scope=scope,
-            client_id=client_id,
-            client_secret=client_secret,
-            redirect_uri=redirect_uri))
+        try:
+            self.sp = spotipy.Spotify(client_credentials_manager=SpotifyOAuth(
+                scope=scope,
+                client_id=client_id,
+                client_secret=client_secret,
+                redirect_uri=redirect_uri))
 
-        # Shows playing devices
-        devs = self.sp.devices()
+            # Shows playing devices
+            devs = self.sp.devices()
+        except ReadTimeout:
+            print('API not reachable, trying again in 2 secs')
+            sleep(2)
+            self.__init__(client_id, client_secret, redirect_uri)
         self.target_id = next(d['id'] for d in devs['devices'] if d['name'] == target)
 
         print(f'Found device {target} at {self.target_id}.')
-        #self.buttonconfig()
+        self.buttonconfig()
 
     def get_tracklist(self, uid):
-        tracks = self.sp.album_tracks(uid)
+        try:
+            tracks = self.sp.album_tracks(uid)
+        except ReadTimeout:
+            print('API not reachable, trying again in 2 secs')
+            sleep(2)
+            return self.get_tracklist(uid)
         tracklist = [t['uri'] for t in tracks['items']]
         return tracklist
 
     def get_album_name(self, uid):
-        thisalbum = self.sp.album(uid)
+        try:
+            thisalbum = self.sp.album(uid)
+        except ReadTimeout:
+            print('API not reachable, trying again in 2 secs')
+            sleep(2)
+            return self.get_album_name(uid)
         artist = " , ".join([n['name'] for n in thisalbum['artists']])
         name = thisalbum['name']
         return f'{artist} - {name}'
 
 
     def playback(self, uid):
-        print(f'Playing {self.get_album_name(uid)}')
-        #self.led.on()
-        self.sp.start_playback(
-            device_id = self.target_id,
-            context_uri=uid
-            #uris = self.get_tracklist(uid)
-        )
-        self.display_image(
-            self.get_image(uid)
-        )
+        try:
+            print(f'Playing {self.get_album_name(uid)}')
+            #self.led.on()
+            self.sp.start_playback(
+                device_id = self.target_id,
+                context_uri=uid
+                #uris = self.get_tracklist(uid)
+            )
+            self.sp.volume(50)
+            self.display_image(
+                self.get_image(uid)
+            )
+        except ReadTimeout:
+            print('API not reachable, trying again in 2 secs')
+            sleep(2)
+            return self.playback(uid)
 
     def pause_resume(self):
-        if self.sp.current_playback()["is_playing"]:
-            self.pause()
-        else:
-            self.resume()
+        try:
+            if self.sp.current_playback()["is_playing"]:
+                self.pause()
+            else:
+                self.resume()
+        except ReadTimeout:
+            print('API not reachable, trying again in 2 secs')
+            sleep(2)
+            return self.pause_resume()
 
     def pause(self):
         try:
@@ -79,40 +106,56 @@ class Spotibox():
                       context_uri = self.current['context']['uri'],
                       offset={'uri':self.current['item']['uri']},
                       position_ms=self.current['progress_ms'])
-
-    
-
     def volume_up(self):
         #self.led.on()
-        current_vol = self.sp.current_playback()['device']['volume_percent']
-        newvol = min(100, current_vol + 10)
-        print(f'Setting volume to {newvol}')
-        self.sp.volume(newvol)
+        try:
+            current_vol = self.sp.current_playback()['device']['volume_percent']
+            newvol = min(100, current_vol + 10)
+            print(f'Setting volume to {newvol}')
+            self.sp.volume(newvol)
+        except ReadTimeout:
+            print('API not reachable, trying again in 2 secs')
+            sleep(2)
+            return self.volume_up()
 
 
     def volume_down(self):
-        #self.led.on()
-        current_vol = self.sp.current_playback()['device']['volume_percent']
-        newvol = max(0, current_vol - 10)
-        print(f'Setting volume to {newvol}')
-        self.sp.volume(newvol)
+        try:
+            current_vol = self.sp.current_playback()['device']['volume_percent']
+            newvol = max(0, current_vol - 10)
+            print(f'Setting volume to {newvol}')
+            self.sp.volume(newvol)
+        except ReadTimeout:
+            print('API not reachable, trying again in 2 secs')
+            sleep(2)
+            return self.volume_down()
 
     def next_track(self):
-        #self.led.on()
         print('Next track...')
-        self.sp.next_track()
+        try:
+            self.sp.next_track()
+        except ReadTimeout:
+            print('API not reachable, trying again in 2 secs')
+            sleep(2)
+            return self.next_track()    
+        
 
     def get_image(self, uid):
-        res = self.sp.album(uid)   
-        fileurl = res['images'][0]['url']
-        filename = f"{fileurl.split('/')[-1]}.jpg"
-        if not os.path.isfile(f'assets/{filename}'):
-            r = requests.get(fileurl, allow_redirects=True)
-            open(f'assets/{filename}', 'wb').write(r.content)
+        try:
+            res = self.sp.album(uid)   
+            fileurl = res['images'][0]['url']
+            filename = f"{fileurl.split('/')[-1]}.jpg"
+            if not os.path.isfile(f'/home/pi/spotibox/assets/{filename}'):
+                r = requests.get(fileurl, allow_redirects=True)
+                open(f'/home/pi/spotibox/assets/{filename}', 'wb').write(r.content)
+        except ReadTimeout:
+            print('API not reachable, trying again in 2 secs')
+            sleep(2)
+            return self.get_image(uid)   
         return filename
 
     def display_image(self, filename):
-        os.system(f'sudo fbi -d /dev/fb1 -T 2 -a -noverbose assets/{filename}')
+        os.system(f'fbi -d /dev/fb0 -T 2 -a -noverbose /home/pi/spotibox/assets/{filename}')
 
     def buttonconfig(self):
         # Default wiring with colored patch cable
@@ -134,9 +177,9 @@ class Spotibox():
         BUTTONPLAY4 = 5
         BUTTONPLAY5 = 6
         BUTTONPLAY6 = 13
-        BUTTONVOLUP = 26 # Temporary until Diode setup
+        BUTTONVOLUP = 14 # Temporary until Diode setup
         BUTTONVOLDOWN = 15
-        BUTTONPAUSE= 14
+        BUTTONPAUSE= 26
         BUTTONNEXT = 12
 
 
@@ -179,6 +222,7 @@ class Spotibox():
         #buttonvoldown.when_released = self.led.off
 
         pause()
+
 
 
 
