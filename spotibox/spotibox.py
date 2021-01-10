@@ -1,16 +1,18 @@
 """Main module."""
-from gpiozero import LED, Button
+from gpiozero import PWMLED, Button
 from signal import pause
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 from pprint import pprint
-from time import sleep
+from time import sleep, time
+
 import requests
 import os.path
 import os
 from spotibox import albums
 from spotipy.exceptions import SpotifyException
 from requests import ReadTimeout
+import asyncio
 
 class Spotibox():
     """
@@ -18,29 +20,46 @@ class Spotibox():
     with GPIO controls.
     """
 
-    def __init__(self, client_id=None, client_secret=None, redirect_uri=None):
+    def __init__(self, client_id=None, client_secret=None, redirect_uri=None, debug = False):
         self.display_image('spotibox.PNG')
         self.current = None
-
+        
         target = 'SPOTIBOX'
         scope = "user-read-playback-state,user-modify-playback-state"
-        try:
-            self.sp = spotipy.Spotify(client_credentials_manager=SpotifyOAuth(
-                scope=scope,
-                client_id=client_id,
-                client_secret=client_secret,
-                redirect_uri=redirect_uri))
+        
+        self.sp = spotipy.Spotify(client_credentials_manager=SpotifyOAuth(
+            scope=scope,
+            client_id=client_id,
+            client_secret=client_secret,
+            redirect_uri=redirect_uri))
 
-            # Shows playing devices
-            devs = self.sp.devices()
-        except ReadTimeout:
-            print('API not reachable, trying again in 2 secs')
-            sleep(2)
-            self.__init__(client_id, client_secret, redirect_uri)
+        # Shows playing devices
+        devs = self.sp.devices()
+        #except ReadTimeout:
+        #    print('API not reachable, trying again in 2 secs')
+        #    sleep(2)
+        #    self.__init__(client_id, client_secret, redirect_uri)
         self.target_id = next(d['id'] for d in devs['devices'] if d['name'] == target)
 
         print(f'Found device {target} at {self.target_id}.')
-        self.buttonconfig()
+        
+        #self.loop = asyncio.get_event_loop()
+        #self.loop.run_until_complete(self.main())
+        if not debug:
+            self.buttonconfig()
+
+    def reset_timer(self):
+        self.timer = time()
+        self.led.value = 1
+    
+    async def main(self):
+        asyncio.ensure_future(self.buttonconfig())
+        asyncio.ensure_future(self.shutdown_timer())
+        
+    async def shutdown_timer(self):
+        while True:
+            sleep(2)
+            print('Made it')
 
     def get_tracklist(self, uid):
         try:
@@ -52,6 +71,15 @@ class Spotibox():
         tracklist = [t['uri'] for t in tracks['items']]
         return tracklist
 
+    def get_playlist_name(self, uid):
+        try:
+            thisname = self.sp.playlist(uid)['name']
+        except ReadTimeout:
+            print('API not reachable, trying again in 2 secs')
+            sleep(2)
+            return self.get_playlist_name(uid)
+        return thisname
+    
     def get_album_name(self, uid):
         try:
             thisalbum = self.sp.album(uid)
@@ -66,7 +94,11 @@ class Spotibox():
 
     def playback(self, uid):
         try:
-            print(f'Playing {self.get_album_name(uid)}')
+            if 'album' in uid:
+                name = self.get_album_name(uid)
+            else:
+                name = self.get_playlist_name(uid)
+            print(f'Playing {name}')
             #self.led.on()
             self.sp.start_playback(
                 device_id = self.target_id,
@@ -77,6 +109,7 @@ class Spotibox():
             self.display_image(
                 self.get_image(uid)
             )
+            self.reset_timer()
         except ReadTimeout:
             print('API not reachable, trying again in 2 secs')
             sleep(2)
@@ -88,10 +121,14 @@ class Spotibox():
                 self.pause()
             else:
                 self.resume()
+            self.reset_timer()
         except ReadTimeout:
             print('API not reachable, trying again in 2 secs')
             sleep(2)
             return self.pause_resume()
+        except TypeError:
+            print('Nothing playing yet.')
+
 
     def pause(self):
         try:
@@ -106,6 +143,7 @@ class Spotibox():
                       context_uri = self.current['context']['uri'],
                       offset={'uri':self.current['item']['uri']},
                       position_ms=self.current['progress_ms'])
+
     def volume_up(self):
         #self.led.on()
         try:
@@ -113,6 +151,7 @@ class Spotibox():
             newvol = min(100, current_vol + 10)
             print(f'Setting volume to {newvol}')
             self.sp.volume(newvol)
+            self.reset_timer()
         except ReadTimeout:
             print('API not reachable, trying again in 2 secs')
             sleep(2)
@@ -125,6 +164,7 @@ class Spotibox():
             newvol = max(0, current_vol - 10)
             print(f'Setting volume to {newvol}')
             self.sp.volume(newvol)
+            self.reset_timer()
         except ReadTimeout:
             print('API not reachable, trying again in 2 secs')
             sleep(2)
@@ -134,6 +174,7 @@ class Spotibox():
         print('Next track...')
         try:
             self.sp.next_track()
+            self.reset_timer()
         except ReadTimeout:
             print('API not reachable, trying again in 2 secs')
             sleep(2)
@@ -142,7 +183,10 @@ class Spotibox():
 
     def get_image(self, uid):
         try:
-            res = self.sp.album(uid)   
+            if 'album' in uid:
+                res = self.sp.album(uid)   
+            else:
+                res = self.sp.playlist(uid)
             fileurl = res['images'][0]['url']
             filename = f"{fileurl.split('/')[-1]}.jpg"
             if not os.path.isfile(f'/home/pi/spotibox/assets/{filename}'):
@@ -153,9 +197,13 @@ class Spotibox():
             sleep(2)
             return self.get_image(uid)   
         return filename
+    
+    def shutdown(self):
+        print('Shutting down...')
+        os.system(f'sudo shutdown -f now')
 
     def display_image(self, filename):
-        os.system(f'fbi -d /dev/fb0 -T 2 -a -noverbose /home/pi/spotibox/assets/{filename}')
+        os.system(f'sudo fbi -d /dev/fb0 -T 1 -a -noverbose /home/pi/spotibox/assets/{filename}')
 
     def buttonconfig(self):
         # Default wiring with colored patch cable
@@ -169,7 +217,7 @@ class Spotibox():
 
         # NOT 19, 20, 21
 
-        # LEDPIN = 5
+        LEDPIN = 23
         
         BUTTONPLAY1 = 4
         BUTTONPLAY2 = 27
@@ -183,8 +231,9 @@ class Spotibox():
         BUTTONNEXT = 12
 
 
-        #self.led = LED(LEDPIN)
+        self.led = PWMLED(LEDPIN)
 
+        
         buttonplay1 = Button(BUTTONPLAY1)
         buttonplay1.when_pressed = lambda: self.playback(albums.album1)
         #buttonplay1.when_released = self.led.off
@@ -209,8 +258,9 @@ class Spotibox():
         buttonnext.when_pressed = self.next_track
         #buttonnext.when_released = self.led.off
 
-        buttonpause = Button(BUTTONPAUSE)
+        buttonpause = Button(BUTTONPAUSE, pull_up = True, hold_time=3, active_state=None)
         buttonpause.when_pressed = self.pause_resume
+        #buttonpause.when_held = self.shutdown
         #buttonnext.when_released = self.led.off
 
         buttonvolup = Button(BUTTONVOLUP)
@@ -221,7 +271,35 @@ class Spotibox():
         buttonvoldown.when_pressed = self.volume_down
         #buttonvoldown.when_released = self.led.off
 
-        pause()
+        self.reset_timer()
+
+        while True:
+            timediff = time() - self.timer
+            if timediff > 600:
+                try:
+                    if not self.sp.current_playback()["is_playing"]:
+                        self.shutdown()
+                except ReadTimeout:
+                    print('API not reachable, trying again in 2 secs')
+                except TypeError:
+                    self.shutdown()
+                    
+            if timediff > 30:
+                self.display_fade()
+            #print(timediff)
+            sleep(1)
+        #pause()
+
+    def display_fade(self):
+        if self.led.value > 0:
+            for i in reversed(range(20)):
+                self.led.value = i / 20
+                sleep(.1)
+
+
+    
+        
+
 
 
 

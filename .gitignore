@@ -115,3 +115,5 @@ assets/
 
 # shell script with secrets
 run
+run.sh
+shutdown.sh
