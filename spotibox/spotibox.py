@@ -12,7 +12,9 @@ import os
 from spotibox import albums
 from spotipy.exceptions import SpotifyException
 from requests import ReadTimeout
-import asyncio
+
+#import pygame
+#from PIL import Image
 
 class Spotibox():
     """
@@ -21,7 +23,15 @@ class Spotibox():
     """
 
     def __init__(self, client_id=None, client_secret=None, redirect_uri=None, debug = False):
+        
+        # init display
+        #pygame.display.init()
+        #self.displaysize = (pygame.display.Info().current_w, pygame.display.Info().current_h)
+        #pygame.mouse.set_visible(False)
+        #self.screen = pygame.display.set_mode(self.displaysize, pygame.FULLSCREEN)
         self.display_image('spotibox.PNG')
+
+
         self.current = None
         
         target = 'SPOTIBOX'
@@ -196,13 +206,19 @@ class Spotibox():
             print('API not reachable, trying again in 2 secs')
             sleep(2)
             return self.get_image(uid)   
+        print(filename)
         return filename
     
     def shutdown(self):
         print('Shutting down...')
         os.system(f'sudo shutdown -f now')
 
-    def display_image(self, filename):
+    def display_image(self, filename):       
+        #Image.open(f"/home/pi/spotibox/assets/{filename}").save("/home/pi/spotibox/assets/temp.bmp")
+        #picture = pygame.image.load('/home/pi/spotibox/assets/temp.bmp').convert()
+        #picture = pygame.transform.scale(picture, self.displaysize)
+        #self.screen.blit(picture, (0, 0))
+        #pygame.display.update()
         os.system(f'sudo fbi -d /dev/fb0 -T 1 -a -noverbose /home/pi/spotibox/assets/{filename}')
 
     def buttonconfig(self):
