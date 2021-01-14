@@ -14,4 +14,4 @@ def init(client_id, client_secret, redirect_uri):
 
 if __name__ == '__main__':
     s = init()
-    pause()
+    #pause()

@@ -1,6 +1,8 @@
 import pygame
 from PIL import Image
 from gpiozero import PWMLED
+from pygame.surface import Surface
+from pygame import image
 
 led = PWMLED(23)
 led.value = 1
@@ -33,12 +35,12 @@ screen.blit(text_surface, (10, 0))
 pygame.display.update()
 
 
-Image.open("/home/pi/spotibox/assets/ab67616d0000b273a877db7d95b6045046414e23.jpg").save("/home/pi/spotibox/assets/temp.bmp")
+Image.open("../assets/ab67616d0000b273a877db7d95b6045046414e23.jpg").save("../assets/temp.bmp")
 
 
-picture = pygame.image.load('/home/pi/spotibox/assets/temp.bmp').convert()
+picture = pygame.image.load('../assets/temp.bmp')
 picture = pygame.transform.scale(picture, (320, 240))
 screen.blit(picture, (0, 0))
 pygame.display.update()
 
- 
+pygame.image.get_extended()

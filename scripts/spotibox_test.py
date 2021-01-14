@@ -6,10 +6,12 @@ box = Spotibox(client_id='42e5b03bb466427bbdd2e328ba0260be',
     redirect_uri='https://example.com/callback/',
     debug=True)
 
-box.sp.playb
+box.playback(albums.album1)
+box.pause()
 
-box.display_image(box.get_image(albums.album1))
 
+box.sp.current_playback()['item']['album']['total_tracks']
+box.sp.current_playback()['item']['track_number']
 
 if 'playlist' in albums.album1:
     print('Playlist')
