@@ -283,7 +283,7 @@ class Spotibox():
 
         buttonpause = Button(BUTTONPAUSE, pull_up = True, hold_time=3, active_state=None)
         buttonpause.when_pressed = self.pause_resume
-        #buttonpause.when_held = self.shutdown
+        buttonpause.when_held = self.shutdown
         #buttonnext.when_released = self.led.off
 
         buttonvolup = Button(BUTTONVOLUP)
