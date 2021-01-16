@@ -1,6 +1,6 @@
 """Main module."""
 from gpiozero import LED, Button
-from signal import pause
+import signal
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 from pprint import pprint
@@ -277,22 +277,30 @@ class Spotibox():
 
         self.reset_timer()      
 
-        while True:
-            timediff = time() - self.timer
-            if timediff > 300:
-                try:
-                    if not self.sp.current_playback()["is_playing"]:
+        signal.signal(signal.SIGTERM, self.service_shutdown)
+        signal.signal(signal.SIGINT, self.service_shutdown)
+
+        print('Starting main loop')
+        try:
+            while True:
+                timediff = time() - self.timer
+                if timediff > 300:
+                    try:
+                        if not self.sp.current_playback()["is_playing"]:
+                            self.shutdown()
+                    except ReadTimeout:
+                        print('API not reachable, trying again in 2 secs')
+                    except TypeError:
                         self.shutdown()
-                except ReadTimeout:
-                    print('API not reachable, trying again in 2 secs')
-                except TypeError:
-                    self.shutdown()
-                    
-            if timediff > 30:
-                self.display_fade()
-            
-            pygame.display.update()
-            self.fps.tick(30)
+                        
+                if timediff > 30:
+                    self.display_fade()
+                
+                pygame.display.update()
+                self.fps.tick(30)
+        except ServiceExit:
+            pygame.display.quit()
+            print('Exiting!')
 
     def display_track_number(self):
         try:
@@ -355,6 +363,17 @@ class Spotibox():
         pygame.draw.rect(self.screen, color, 
                         (X, 0, 20, 240)) 
 
+    def service_shutdown(self, signum, frame):
+        print('Caught signal %d' % signum)
+        raise ServiceExit
+
+
+class ServiceExit(Exception):
+    """
+    Custom exception which is used to trigger the clean exit
+    of all running threads and the main program.
+    """
+    pass
 
     
         
