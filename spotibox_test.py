@@ -1,40 +1,39 @@
 from spotibox.spotibox import Spotibox
-from spotibox import albums
-from spotipy.exceptions import SpotifyException
+from spotibox.spotibox import albums
+import asyncio
+import json
+box = Spotibox(client_id='42e5b03bb466427bbdd2e328ba0260be',
+    client_secret='1d45cee916fc489ab0cce264f0b215e4',
+    redirect_uri='https://example.com/callback/',
+    debug=True)
 
-box = Spotibox(
-    client_id="42e5b03bb466427bbdd2e328ba0260be",
-    client_secret="1d45cee916fc489ab0cce264f0b215e4",
-    redirect_uri='https://example.com/callback/'
-    )
-
-
-
-box.playback(albums.album1)
-box.next_track()
-box.pause_resume()
-box.volume_down()
-box.volume_up()
+box.playback(albums.album1))
 box.pause()
-box.resume()
-box.buttonconfig()
-
-box.sp.current_playback()["is_playing"]
 
 
+with open('playlist.json', 'w') as file:
+    json.dump(playlist, file, indent=2)
+    # file.write(json.dumps())
+
+playback = box.sp.current_playback()
+with open('playback.json', 'w') as file:
+    json.dump(playback, file, indent=2)
+    # file.write(json.dumps())
+
+playback['context']['uri']
+
+pl_tracks = [i['track']['uri'] for i in playlist['tracks']['items']]
+pb_track = playback['item']['uri']
+total = len(pl_tracks)
+current = pl_tracks.index(pb_track) + 1
 
 
 
-try:
-    current = box.sp.current_playback()
-    box.sp.pause_playback()
-    print('Playback paused.')
-except SpotifyException as err:
-    print(err.msg)
+playlist['tracks']['items'][0]['track']['uri']
 
-box.sp.start_playback(device_id = current['device']['id'],
-                      context_uri = current['context']['uri'],
-                      offset={'uri':current['item']['uri']},
-                      position_ms=current['progress_ms'])
 
-current['context']
+box.sp.current_playback()['item']['album']['total_tracks']
+box.sp.current_playback()['item']['track_number']
+
+if 'playlist' in albums.album1:
+    print('Playlist')
