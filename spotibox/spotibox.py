@@ -35,44 +35,31 @@ class Spotibox():
 
         self.current = None
         self.current_image = None
-        self._circle_cache = {}
         
         target = 'SPOTIBOX'
         scope = "user-read-playback-state,user-modify-playback-state"
+        
         
         self.sp = spotipy.Spotify(client_credentials_manager=SpotifyOAuth(
             scope=scope,
             client_id=client_id,
             client_secret=client_secret,
             redirect_uri=redirect_uri))
-
+        
         # Shows playing devices
         devs = self.sp.devices()
-        #except ReadTimeout:
-        #    print('API not reachable, trying again in 2 secs')
-        #    sleep(2)
-        #    self.__init__(client_id, client_secret, redirect_uri)
+        
         self.target_id = next(d['id'] for d in devs['devices'] if d['name'] == target)
 
         print(f'Found device {target} at {self.target_id}.')
         
-        #self.loop = asyncio.get_event_loop()
-        #self.loop.run_until_complete(self.main())
         if not debug:
             self.buttonconfig()
 
     def reset_timer(self):
         self.timer = time()
         self.led.on()
-    
-    async def main(self):
-        asyncio.ensure_future(self.buttonconfig())
-        asyncio.ensure_future(self.shutdown_timer())
         
-    async def shutdown_timer(self):
-        while True:
-            sleep(2)
-            print('Made it')
 
     def get_tracklist(self, uid):
         try:
@@ -112,11 +99,9 @@ class Spotibox():
             else:
                 name = self.get_playlist_name(uid)
             print(f'Playing {name}')
-            #self.led.on()
             self.sp.start_playback(
                 device_id = self.target_id,
                 context_uri=uid
-                #uris = self.get_tracklist(uid)
             )
             self.sp.volume(50)
             self.display_image(
@@ -229,8 +214,6 @@ class Spotibox():
         self.screen.fill((0, 0, 0))  
         self.screen.blit(picture, coord)
         self.current_image = filename
-        #pygame.display.update()
-        #os.system(f'sudo fbi -d /dev/fb0 -T 1 -a -noverbose /home/pi/spotibox/assets/{filename}')
 
     def buttonconfig(self):
         # Default wiring with colored patch cable
@@ -296,7 +279,7 @@ class Spotibox():
 
         while True:
             timediff = time() - self.timer
-            if timediff > 600:
+            if timediff > 300:
                 try:
                     if not self.sp.current_playback()["is_playing"]:
                         self.shutdown()
@@ -310,12 +293,8 @@ class Spotibox():
             
             pygame.display.update()
             self.fps.tick(30)
-        #pause()
 
     def display_track_number(self):
-        #font = pygame.font.Font(None, 60)
-        
-        # Render some white text (pyScope 0.1) onto text_surface
         try:
             playback = self.sp.current_playback()
         except ReadTimeout:
@@ -325,10 +304,6 @@ class Spotibox():
         if playback["is_playing"]:
                 total = playback['item']['album']['total_tracks']
                 current = playback['item']['track_number']
-                # text_surface = font.render(f'{current} / {total}', 
-                #    True, (255, 255, 255))  # White text   
-                # ce =  self.render(f'{current} / {total}', font)
-                # self.screen.blit(text_surface, (10, 180))
                 self.remove_boxes('left')
                 self.draw_boxes(total, current, 'left')
             #else:
@@ -342,9 +317,7 @@ class Spotibox():
             print('API not reachable, trying again in 2 secs')
             return 
         self.remove_boxes('right')
-        self.draw_boxes(10, int(current_vol/10), 'right')
-        
-        
+        self.draw_boxes(10, int(current_vol/10), 'right')     
         
     def clear_screen(self):
         self.screen.fill((0, 0, 0))
@@ -381,45 +354,7 @@ class Spotibox():
         color = (0, 0, 0)
         pygame.draw.rect(self.screen, color, 
                         (X, 0, 20, 240)) 
-    
-    # def render(self, text, font, gfcolor=(0,0,0), ocolor=(255, 255, 255), opx=2):
-    #     textsurface = font.render(text, True, gfcolor).convert_alpha()
-    #     w = textsurface.get_width() + 2 * opx
-    #     h = font.get_height()
 
-    #     osurf = pygame.Surface((w, h + 2 * opx)).convert_alpha()
-    #     osurf.fill((0, 0, 0, 0))
-
-    #     surf = osurf.copy()
-
-    #     osurf.blit(font.render(text, True, ocolor).convert_alpha(), (0, 0))
-
-    #     for dx, dy in self._circlepoints(opx):
-    #         surf.blit(osurf, (dx + opx, dy + opx))
-
-    #     surf.blit(textsurface, (opx, opx))
-    #     return surf
-
-    
-    # def _circlepoints(self, r):
-    #     r = int(round(r))
-    #     if r in self._circle_cache:
-    #         return self._circle_cache[r]
-    #     x, y, e = r, 0, 1 - r
-    #     self._circle_cache[r] = points = []
-    #     while x >= y:
-    #         points.append((x, y))
-    #         y += 1
-    #         if e < 0:
-    #             e += 2 * y - 1
-    #         else:
-    #             x -= 1
-    #             e += 2 * (y - x) - 1
-    #     points += [(y, x) for x, y in points if x > y]
-    #     points += [(-x, y) for x, y in points if x]
-    #     points += [(x, -y) for x, y in points if y]
-    #     points.sort()
-    #     return points
 
     
         
