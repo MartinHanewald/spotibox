@@ -26,7 +26,7 @@ class Spotibox():
         
         # init display
         pygame.display.init()
-        pygame.font.init()
+        #pygame.font.init()
         pygame.mouse.set_visible(False)
         self.displaysize = (pygame.display.Info().current_w, pygame.display.Info().current_h)
         self.screen = pygame.display.set_mode(self.displaysize, pygame.FULLSCREEN)
@@ -208,6 +208,7 @@ class Spotibox():
     
     def shutdown(self):
         print('Shutting down...')
+        pygame.display.quit()
         os.system(f'sudo shutdown -f now')
 
     def display_image(self, filename):       
@@ -283,7 +284,7 @@ class Spotibox():
 
         buttonpause = Button(BUTTONPAUSE, pull_up = True, hold_time=3, active_state=None)
         buttonpause.when_pressed = self.pause_resume
-        #buttonpause.when_held = self.shutdown
+        buttonpause.when_held = self.shutdown
 
         buttonvolup = Button(BUTTONVOLUP)
         buttonvolup.when_pressed = self.volume_up
@@ -312,7 +313,7 @@ class Spotibox():
         #pause()
 
     def display_track_number(self):
-        font = pygame.font.Font(None, 60)
+        #font = pygame.font.Font(None, 60)
         
         # Render some white text (pyScope 0.1) onto text_surface
         try:

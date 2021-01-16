@@ -6,7 +6,7 @@ album2 = 'spotify:album:0a6NsOaOzlrubGl3htyVWG'
 album3 = 'spotify:album:0Lv1iJm33h876fkf7FSa5W'
 # Frozen
 album4 = 'spotify:album:7j4mc221YMLgEEBdfNFXqm'
-# Feuerwehrmann Sam
-album5 = 'spotify:album:5AEK07Yfq3HvjCmwpg5Ufv'
+# Wicki
+album5 = 'spotify:album:3GfHcYxBcxdfG19nK1duKG'
 # Lustige Dinolieder
 album6 = 'spotify:album:2edKmVaDZy42lAmT0DHUJR'
