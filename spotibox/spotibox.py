@@ -1,20 +1,22 @@
 """Main module."""
-from gpiozero import LED, PWMLED, Button
+import os
+import os.path
 import signal
-import spotipy
-from spotipy.oauth2 import SpotifyOAuth
 from pprint import pprint
 from time import sleep, time
 
-import requests
-import os.path
-import os
-from spotibox import albums
-from spotipy.exceptions import SpotifyException
-from requests import ReadTimeout
-
 import pygame
+import requests
+import spotipy
+from gpiozero import LED, PWMLED, Button
 from PIL import Image
+from requests import ReadTimeout
+from spotipy.exceptions import SpotifyException
+from spotipy.oauth2 import SpotifyOAuth
+
+from spotibox import albums
+from spotibox.multibutton import MultiButtonBoard
+
 
 class Spotibox():
     """
@@ -238,18 +240,36 @@ class Spotibox():
         BUTTONPLAY1 = 4
         BUTTONPLAY2 = 27
         BUTTONPLAY3 = 22
+        
+        # Group to Buttonboard 1 -> PLAY7
         BUTTONPLAY4 = 5
         BUTTONPLAY5 = 6
+        
+        # Group to BUttonboard 2 -> PLAY8
         BUTTONPLAY6 = 13
-        BUTTONVOLUP = 14 # Temporary until Diode setup
-        BUTTONVOLDOWN = 15
         BUTTONPAUSE= 26
+
+        BUTTONVOLUP = 14 
+        BUTTONVOLDOWN = 15     
         BUTTONNEXT = 12
 
 
         self.led = PWMLED(LEDPIN)
 
-        
+        mltbtns1 = MultiButtonBoard(pin1 = BUTTONPLAY4, pin2 = BUTTONPLAY5, bounce_time = .5,
+                                    callbacks = (
+                                        lambda: self.playback(albums.album4), 
+                                        lambda: self.playback(albums.album5),
+                                        lambda: self.playback(albums.album7)
+                                    ))
+
+        mltbtns2 = MultiButtonBoard(pin1 = BUTTONPLAY6, pin2 = BUTTONPAUSE, bounce_time = .5,
+                                    callbacks = (
+                                        lambda: self.playback(albums.album6), 
+                                        self.pause_resume,
+                                        lambda: self.playback(albums.album8)
+                                    ))
+
         buttonplay1 = Button(BUTTONPLAY1)
         buttonplay1.when_pressed = lambda: self.playback(albums.album1)
 
@@ -259,22 +279,22 @@ class Spotibox():
         buttonplay3 = Button(BUTTONPLAY3)
         buttonplay3.when_pressed = lambda: self.playback(albums.album3)
 
-        buttonplay4 = Button(BUTTONPLAY4)
-        buttonplay4.when_pressed = lambda: self.playback(albums.album4)
+        # buttonplay4 = Button(BUTTONPLAY4)
+        # buttonplay4.when_pressed = lambda: self.playback(albums.album4)
 
-        buttonplay5 = Button(BUTTONPLAY5)
-        buttonplay5.when_pressed = lambda: self.playback(albums.album5)
+        # buttonplay5 = Button(BUTTONPLAY5)
+        # buttonplay5.when_pressed = lambda: self.playback(albums.album5)
 
-        buttonplay6 = Button(BUTTONPLAY6)
-        buttonplay6.when_pressed = lambda: self.playback(albums.album6)
+        # buttonplay6 = Button(BUTTONPLAY6)
+        # buttonplay6.when_pressed = lambda: self.playback(albums.album6)
+
+        # buttonpause = Button(BUTTONPAUSE, pull_up = True, hold_time=3, active_state=None)
+        # buttonpause.when_pressed = self.pause_resume
+        # # buttonpause.when_held = self.shutdown
 
         buttonnext = Button(BUTTONNEXT)
         buttonnext.when_pressed = self.next_track
-
-        buttonpause = Button(BUTTONPAUSE, pull_up = True, hold_time=3, active_state=None)
-        buttonpause.when_pressed = self.pause_resume
-        buttonpause.when_held = self.shutdown
-
+        
         buttonvolup = Button(BUTTONVOLUP)
         buttonvolup.when_pressed = self.volume_up
 

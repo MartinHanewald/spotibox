@@ -3,12 +3,13 @@ import time
 
 
 GPIO.setmode(GPIO.BCM)
+A = 13
+B = 26
 
-
-GPIO.setup(14, GPIO.IN, pull_up_down = GPIO.PUD_UP)
-GPIO.setup(15, GPIO.IN, pull_up_down = GPIO.PUD_UP)
+GPIO.setup(A, GPIO.IN, pull_up_down = GPIO.PUD_UP)
+GPIO.setup(B, GPIO.IN, pull_up_down = GPIO.PUD_UP)
 
 while True:
-    print(f'{GPIO.input(14)} \t {GPIO.input(15)}')
+    print(f'{GPIO.input(A)} \t {GPIO.input(B)}')
     time.sleep(0.2)
 

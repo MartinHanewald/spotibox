@@ -1,10 +1,15 @@
-from functools import wraps
+from gpiozero import ButtonBoard, Button
+from gpiozero.mixins import HoldMixin
+from gpiozero.devices import CompositeDevice
 from signal import pause
 from time import sleep
+from functools import wraps 
 
-from gpiozero import Button, ButtonBoard
-from gpiozero.devices import CompositeDevice
-from gpiozero.mixins import HoldMixin
+
+#graph = LEDBarGraph(2, 3, 4, 5)
+#btns = ButtonBoard(5, 6, 13, 26)
+
+
 
 
 class MultiButton(Button):
@@ -16,13 +21,12 @@ class MultiButton(Button):
             pin, pull_up=True, active_state=None, bounce_time=None,
             hold_time=1, hold_repeat=False, pin_factory=None)
         self.parent = parent
-
+    
     def _wrap_callback(self, fn):
         @wraps(fn)
         def wrapper():
             return fn(self.parent)
         return wrapper
-
 
 class MultiButtonBoard(HoldMixin, CompositeDevice):
     """
@@ -96,7 +100,6 @@ class MultiButtonBoard(HoldMixin, CompositeDevice):
         many pins as necessary and use any names, provided they're not already
         in use by something else.
     """
-
     def __init__(self, *args, **kwargs):
         pull_up = kwargs.pop('pull_up', True)
         active_state = kwargs.pop('active_state', None)
@@ -107,26 +110,25 @@ class MultiButtonBoard(HoldMixin, CompositeDevice):
         order = kwargs.pop('_order', None)
         self.callbacks = kwargs.pop('callbacks', None)
         print(self.callbacks)
-
+        
         super(MultiButtonBoard, self).__init__(
             *(
                 MultiButton(pin, pull_up=pull_up, active_state=active_state,
-                            bounce_time=bounce_time, hold_time=hold_time,
-                            hold_repeat=hold_repeat, parent=self)
+                       bounce_time=bounce_time, hold_time=hold_time,
+                       hold_repeat=hold_repeat, parent = self)
                 for pin in args
             ),
             _order=order,
             pin_factory=pin_factory,
             **{
                 name: MultiButton(pin, pull_up=pull_up, active_state=active_state,
-                                  bounce_time=bounce_time, hold_time=hold_time,
-                                  hold_repeat=hold_repeat, parent=self)
+                             bounce_time=bounce_time, hold_time=hold_time,
+                             hold_repeat=hold_repeat, parent = self)
                 for name, pin in kwargs.items()
             }
         )
         if len(self) == 0:
             raise GPIOPinMissing('No pins given')
-
         def get_new_handler(device):
             def fire_both_events(ticks, state):
                 device._fire_events(ticks, device._state_to_value(state))
@@ -145,21 +147,25 @@ class MultiButtonBoard(HoldMixin, CompositeDevice):
         self._fire_events(self.pin_factory.ticks(), self.is_active)
         self.hold_time = hold_time
         self.hold_repeat = hold_repeat
+        
 
     def choose_callback(self, parent):
+        #print('choose callback')
         v1 = parent.pin1.value
         v2 = parent.pin2.value
-
+                
+        #if v1 and v2:
         if v1 and not v2:
             self.callbacks[0]()
-
+        
         if v2 and not v1:
             self.callbacks[1]()
 
         if v1 and v2:
             self.callbacks[2]()
 
-        # sleep(.2)
+        sleep(.2)
+        
 
     @property
     def pull_up(self):
@@ -175,7 +181,7 @@ class MultiButtonBoard(HoldMixin, CompositeDevice):
 
     @when_changed.setter
     def when_changed(self, value):
-        # print('when_changed')
+        print('when_changed')
         self._when_changed = self._wrap_callback(value)
         print(self._when_changed)
 
@@ -191,3 +197,52 @@ class MultiButtonBoard(HoldMixin, CompositeDevice):
             pass
         elif old_value != new_value:
             self._fire_changed()
+
+
+
+
+def fun1():
+    print('1')
+
+def fun2():
+    print('2')
+
+def fun3():
+    print('3')
+
+def presser(parent):
+    v1 = parent.btn1.value
+    v2 = parent.btn2.value
+    #if v1 and v2:
+    if v1 and not v2:
+        print('Play 4')
+    
+    if v2 and not v1:
+        print('Play 5')
+
+    if v1 and v2:
+        print('Play 7')
+
+    sleep(.2)
+    
+
+#btns.btn1.when_pressed = presser
+#btns.btn2.when_pressed = presser
+#btns.when_changed = presser
+
+btns = MultiButtonBoard(pin1 = 5, pin2 = 6, bounce_time = .5,
+    callbacks = (fun1, fun2, fun3))
+
+
+
+pause()
+
+
+
+# while True:
+#     for v in btns.value:
+#         print(v)
+
+#     print('----------------')
+#     sleep(.5)
+# #pause()
