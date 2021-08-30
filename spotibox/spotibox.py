@@ -1,6 +1,7 @@
 """Main module."""
 import os
 import os.path
+import random
 import signal
 from pprint import pprint
 from time import sleep, time
@@ -95,11 +96,37 @@ class Spotibox():
         name = thisalbum['name']
         return f'{artist} - {name}'
 
+    def get_random_album(self, uid):
+        try:
+            albumlist = list()
+            n = 50
+            i = 0
+            while(n == 50):
+                ans = self.sp.artist_albums(uid, 
+                        album_type = 'album',
+                        limit = 50,
+                        country = 'DE',
+                        offset = 50 * i)
+                n = len(ans['items'])
+                albumlist += [k['uri'] for k in ans['items']]
+                i += 1
+        except ReadTimeout:
+            print('API not reachable')
+            return
+        return random.sample(albumlist, 1)[0]
+
     def playback(self, uid):
         if 'album' in uid:
             name = self.get_album_name(uid)
-        else:
+        elif 'artist' in uid:
+            self.playback(
+                self.get_random_album(uid)
+            )
+            return
+        elif 'playlist' in uid:
             name = self.get_playlist_name(uid)
+        else:
+            return
         try:
             self.sp.start_playback(
                 device_id=self.target_id,
