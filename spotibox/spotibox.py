@@ -14,9 +14,12 @@ from requests import ReadTimeout
 from spotipy.exceptions import SpotifyException
 from spotipy.oauth2 import SpotifyOAuth
 
-from spotibox import albums
+#from spotibox import albums
 from spotibox.multibutton import MultiButtonBoard
-
+import importlib.util
+spec = importlib.util.spec_from_file_location("albums", "/mnt/albums/albums.py")
+albums = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(albums)
 
 class Spotibox():
     """
