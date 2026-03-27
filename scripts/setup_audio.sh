@@ -114,6 +114,25 @@ echo "[OK] Device type set to speaker"
 sed -i 's|^#\?LIBRESPOT_INITIAL_VOLUME=.*|LIBRESPOT_INITIAL_VOLUME=50|' "$RASPOTIFY_CONF"
 echo "[OK] Initial volume set to 50%"
 
+# System cache → persistent directory for credential storage
+CACHE_DIR="/var/cache/raspotify"
+mkdir -p "$CACHE_DIR"
+chown raspotify:raspotify "$CACHE_DIR" 2>/dev/null || true
+if grep -q "^LIBRESPOT_SYSTEM_CACHE=\"$CACHE_DIR\"" "$RASPOTIFY_CONF"; then
+    echo "[OK] System cache already set to '$CACHE_DIR'"
+else
+    sed -i "s|^#\\?LIBRESPOT_SYSTEM_CACHE=.*|LIBRESPOT_SYSTEM_CACHE=\"$CACHE_DIR\"|" "$RASPOTIFY_CONF"
+    echo "[OK] System cache set to '$CACHE_DIR'"
+fi
+
+# Ensure credential caching is enabled (comment out the disable flag)
+if grep -q "^LIBRESPOT_DISABLE_CREDENTIAL_CACHE=" "$RASPOTIFY_CONF"; then
+    sed -i 's|^LIBRESPOT_DISABLE_CREDENTIAL_CACHE=|#LIBRESPOT_DISABLE_CREDENTIAL_CACHE=|' "$RASPOTIFY_CONF"
+    echo "[OK] Credential caching enabled (was disabled)"
+else
+    echo "[OK] Credential caching is enabled"
+fi
+
 echo ""
 
 # -----------------------------------------------------------
@@ -138,10 +157,11 @@ echo ""
 echo "=== Audio Setup Complete ==="
 echo ""
 echo "Configuration:"
-echo "  Device name:  $DEVICE_NAME"
-echo "  ALSA device:  $ALSA_DEVICE"
-echo "  Bitrate:      320 kbps"
-echo "  Config file:  $RASPOTIFY_CONF"
+echo "  Device name:   $DEVICE_NAME"
+echo "  ALSA device:   $ALSA_DEVICE"
+echo "  Bitrate:       320 kbps"
+echo "  System cache:  $CACHE_DIR"
+echo "  Config file:   $RASPOTIFY_CONF"
 echo ""
 
 if ! aplay -l 2>/dev/null | grep -q "wm8960soundcard"; then
@@ -154,3 +174,13 @@ else
     echo "Verify with:"
     echo "  bash scripts/test_audio.sh"
 fi
+
+echo ""
+echo "=== Next Step: Authenticate with Spotify ==="
+echo ""
+echo "  Run the OAuth setup to link your Spotify account:"
+echo "    sudo bash scripts/setup_spotify_auth.sh"
+echo ""
+echo "  This is required so that '$DEVICE_NAME' appears as a"
+echo "  device for your account without needing another device"
+echo "  to stream to it first."
