@@ -6,6 +6,7 @@ import logging
 import os
 import random
 import signal
+import struct
 import subprocess
 from pathlib import Path
 from time import sleep, time
@@ -14,7 +15,7 @@ from types import ModuleType
 import pygame
 import requests
 import spotipy
-from gpiozero import LED, Button
+from gpiozero import Button
 from PIL import Image
 from requests import ReadTimeout
 from spotipy.exceptions import SpotifyException
@@ -32,8 +33,11 @@ ALBUMS_PATH = Path("/mnt/albums/albums.py")
 ASSETS_DIR = Path("assets")
 VOLUME_STEP = 10
 IDLE_TIMEOUT = 300   # seconds before idle-shutdown check
-FADE_TIMEOUT = 30    # seconds before LED fade
+FADE_TIMEOUT = 30    # seconds before backlight fade
+BACKLIGHT = Path("/sys/class/backlight/fb_ili9341/brightness")
 FPS = 30
+FB_DEVICE = Path("/dev/fb1")
+FB_WIDTH, FB_HEIGHT = 320, 240
 
 
 def _load_albums() -> ModuleType:
@@ -66,20 +70,27 @@ class Spotibox:
 
         # Display — target the ILI9341 SPI framebuffer
         os.environ.setdefault("SDL_FBDEV", "/dev/fb1")
+        self._use_fb = FB_DEVICE.exists()
+        if self._use_fb:
+            os.environ.setdefault("SDL_VIDEODRIVER", "offscreen")
         pygame.display.init()
         pygame.mouse.set_visible(False)
-        self.displaysize = (
-            pygame.display.Info().current_w,
-            pygame.display.Info().current_h,
+        if self._use_fb:
+            self.displaysize = (FB_WIDTH, FB_HEIGHT)
+        else:
+            self.displaysize = (
+                pygame.display.Info().current_w,
+                pygame.display.Info().current_h,
+            )
+        self.screen = pygame.display.set_mode(
+            self.displaysize, 0 if self._use_fb else pygame.FULLSCREEN
         )
-        self.screen = pygame.display.set_mode(self.displaysize, pygame.FULLSCREEN)
         self.display_image("spotibox.PNG")
         self.fps = pygame.time.Clock()
 
         self.current: dict | None = None
         self.current_image: str | None = None
         self.timer: float = time()
-        self.led: LED | None = None
         self.debug = debug
 
         # Spotify auth
@@ -114,7 +125,7 @@ class Spotibox:
             sleep(1)
 
         logger.debug("Current playback state: %s", self.current)
-        if self.current["is_playing"]:
+        if self.current["is_playing"] and self.current.get("context"):
             self.display_image(self.get_image(self.current["context"]["uri"]))
             self.display_track_number()
             self.display_volume()
@@ -148,20 +159,18 @@ class Spotibox:
                 if timediff > FADE_TIMEOUT:
                     self._display_fade()
 
-                pygame.display.update()
                 self.fps.tick(FPS)
         except ServiceExit:
             pygame.display.quit()
             logger.info("Exiting!")
 
     # ------------------------------------------------------------------
-    # Timer / LED helpers
+    # Timer / backlight helpers
     # ------------------------------------------------------------------
 
     def reset_timer(self) -> None:
         self.timer = time()
-        if self.led is not None:
-            self.led.on()
+        self._backlight_on()
 
     # ------------------------------------------------------------------
     # Spotify API helpers
@@ -394,6 +403,7 @@ class Spotibox:
         self.screen.fill((0, 0, 0))
         self.screen.blit(picture, coord)
         self.current_image = filename
+        self._flush_to_fb()
 
     # ------------------------------------------------------------------
     # GPIO setup
@@ -402,7 +412,6 @@ class Spotibox:
     def _setup_buttons(self) -> None:
         """Wire GPIO pins to playback handlers."""
         # Pin assignments (BCM numbering)
-        LEDPIN = 23
         BUTTONPLAY1 = 4
         BUTTONPLAY2 = 27
         BUTTONPLAY3 = 22
@@ -416,7 +425,6 @@ class Spotibox:
         # Pins 19, 20, 21 are not used.
 
         albums = self.albums
-        self.led = LED(LEDPIN)
 
         self._mltbtns1 = MultiButtonBoard(
             pin1=BUTTONPLAY4,
@@ -440,22 +448,22 @@ class Spotibox:
             ),
         )
 
-        buttonplay1 = Button(BUTTONPLAY1)
+        buttonplay1 = Button(BUTTONPLAY1, bounce_time=0.05)
         buttonplay1.when_pressed = lambda: self.playback(albums.album1)
 
-        buttonplay2 = Button(BUTTONPLAY2)
+        buttonplay2 = Button(BUTTONPLAY2, bounce_time=0.05)
         buttonplay2.when_pressed = lambda: self.playback(albums.album2)
 
-        buttonplay3 = Button(BUTTONPLAY3)
+        buttonplay3 = Button(BUTTONPLAY3, bounce_time=0.05)
         buttonplay3.when_pressed = lambda: self.playback(albums.album3)
 
-        buttonnext = Button(BUTTONNEXT)
+        buttonnext = Button(BUTTONNEXT, bounce_time=0.05)
         buttonnext.when_pressed = self.next_track
 
-        buttonvolup = Button(BUTTONVOLUP)
+        buttonvolup = Button(BUTTONVOLUP, bounce_time=0.05)
         buttonvolup.when_pressed = self.volume_up
 
-        buttonvoldown = Button(BUTTONVOLDOWN)
+        buttonvoldown = Button(BUTTONVOLDOWN, bounce_time=0.05)
         buttonvoldown.when_pressed = self.volume_down
 
         # Keep references so callbacks aren't garbage-collected
@@ -487,20 +495,35 @@ class Spotibox:
 
         self._remove_boxes("left")
         self._draw_boxes(total, current, "left")
+        self._flush_to_fb()
 
     def display_volume(self) -> None:
         current_vol = self.current["device"]["volume_percent"]
         self._remove_boxes("right")
         self._draw_boxes(10, int(current_vol / 10), "right")
+        self._flush_to_fb()
 
     def clear_screen(self) -> None:
         self.screen.fill((0, 0, 0))
         if self.current_image is not None:
             self.display_image(self.current_image)
+        else:
+            self._flush_to_fb()
 
     def _display_fade(self) -> None:
-        if self.led is not None and self.led.value > 0:
-            self.led.off()
+        self._backlight_off()
+
+    def _backlight_on(self) -> None:
+        try:
+            BACKLIGHT.write_text("1")
+        except OSError:
+            pass
+
+    def _backlight_off(self) -> None:
+        try:
+            BACKLIGHT.write_text("0")
+        except OSError:
+            pass
 
     def _draw_boxes(self, n: int, active: int, side: str = "left") -> None:
         BASE = (50, 50, 50)
@@ -520,6 +543,33 @@ class Spotibox:
     def _remove_boxes(self, side: str = "left") -> None:
         X = 10 if side == "left" else 290
         pygame.draw.rect(self.screen, (0, 0, 0), (X, 0, 20, 240))
+
+    def _flush_to_fb(self) -> None:
+        """Push the current screen surface to the ILI9341 framebuffer.
+
+        SDL2 dropped the legacy ``fbcon`` video driver so pygame cannot
+        target ``/dev/fb1`` directly.  We render into an offscreen surface
+        and convert the result to BGR565 for the framebuffer.
+
+        When ``/dev/fb1`` is not present (development machines) this falls
+        back to a normal ``pygame.display.update()``.
+        """
+        if not self._use_fb:
+            pygame.display.update()
+            return
+
+        raw = pygame.image.tobytes(self.screen, "RGB")
+        w, h = self.displaysize
+        n = w * h
+        buf = bytearray(n * 2)
+        for i in range(n):
+            off = i * 3
+            r, g, b = raw[off], raw[off + 1], raw[off + 2]
+            struct.pack_into(
+                "<H", buf, i * 2,
+                ((b >> 3) << 11) | ((g >> 2) << 5) | (r >> 3),
+            )
+        FB_DEVICE.write_bytes(buf)
 
     # ------------------------------------------------------------------
     # Shutdown / signal handling

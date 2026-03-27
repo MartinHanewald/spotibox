@@ -142,3 +142,138 @@ class TestPygameFramebuffer:
 
         # Clean up
         fill_screen(0, 0, 0)
+
+
+def _surface_to_fb(surface) -> None:
+    """Convert a pygame Surface to BGR565 and write it to the framebuffer.
+
+    SDL2 dropped the legacy ``fbcon`` video driver, so pygame cannot target
+    ``/dev/fb1`` directly.  Instead we render into an offscreen surface
+    (using real pygame transforms) and push the result to the framebuffer
+    ourselves.
+    """
+    import pygame
+
+    raw = pygame.image.tobytes(surface, "RGB")
+    buf = bytearray(FRAME_SIZE)
+    for i in range(WIDTH * HEIGHT):
+        off = i * 3
+        r, g, b = raw[off], raw[off + 1], raw[off + 2]
+        struct.pack_into("<H", buf, i * 2, ((b >> 3) << 11) | ((g >> 2) << 5) | (r >> 3))
+    FB_DEVICE.write_bytes(buf)
+
+
+class TestPygameImageRendering:
+    """Render images via the real pygame pipeline and push to /dev/fb1.
+
+    These tests mirror the Spotibox.display_image() flow: open an image
+    with Pillow, convert to BMP, load into a pygame surface, scale, and
+    blit — then convert the surface to BGR565 and write to the
+    framebuffer.  SDL2 has no ``fbcon`` driver, so we bridge the last
+    mile manually while exercising the full pygame rendering path.
+    """
+
+    ASSETS_DIR = Path(__file__).resolve().parent.parent / "assets"
+
+    @pytest.fixture(autouse=True)
+    def _pygame_session(self):
+        """Initialise pygame in offscreen mode and create a screen surface."""
+        import os
+        os.environ["SDL_VIDEODRIVER"] = "offscreen"
+
+        import pygame
+        self.pygame = pygame
+        pygame.display.init()
+        self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
+        yield
+        pygame.display.quit()
+        fill_screen(0, 0, 0)
+
+    # -- helpers ---------------------------------------------------------
+
+    def _display_image(self, filename: str) -> None:
+        """Replicate the Spotibox.display_image() pipeline."""
+        from PIL import Image as PILImage
+
+        src = self.ASSETS_DIR / filename
+        tmp = self.ASSETS_DIR / "temp.bmp"
+        PILImage.open(src).save(tmp)
+
+        picture = self.pygame.image.load(str(tmp))
+        psize = picture.get_size()
+        scale = HEIGHT / psize[1]
+        new_size = (int(psize[0] * scale), int(psize[1] * scale))
+        picture = self.pygame.transform.scale(picture, new_size)
+
+        coord = ((WIDTH - new_size[0]) // 2, (HEIGHT - new_size[1]) // 2)
+        self.screen.fill((0, 0, 0))
+        self.screen.blit(picture, coord)
+        _surface_to_fb(self.screen)
+
+    def _read_fb(self) -> bytes:
+        return FB_DEVICE.read_bytes()
+
+    # -- tests -----------------------------------------------------------
+
+    def test_pygame_render_splash(self):
+        """Render the splash PNG through pygame and verify the framebuffer
+        contains non-black pixel data."""
+        splash = self.ASSETS_DIR / "splash_320x240.png"
+        assert splash.exists(), f"Splash image not found at {splash}"
+
+        self._display_image("splash_320x240.png")
+        time.sleep(0.5)
+
+        data = self._read_fb()
+        assert data != b"\x00" * FRAME_SIZE, (
+            "Framebuffer is all black after pygame render"
+        )
+
+    def test_pygame_render_album_art(self):
+        """Render a cached album-art JPEG through pygame."""
+        jpgs = sorted(self.ASSETS_DIR.glob("*.jpg"))
+        if not jpgs:
+            pytest.skip("No album-art JPEGs in assets/")
+
+        self._display_image(jpgs[0].name)
+        time.sleep(0.5)
+
+        data = self._read_fb()
+        assert data != b"\x00" * FRAME_SIZE, (
+            "Framebuffer is all black after rendering album art"
+        )
+
+    def test_pygame_solid_fill(self):
+        """Use pygame to fill the screen with a solid colour and verify the
+        framebuffer contains the expected pixel value."""
+        self.screen.fill((255, 0, 0))
+        _surface_to_fb(self.screen)
+        time.sleep(0.3)
+
+        data = self._read_fb()
+        expected = rgb565(255, 0, 0)
+        # Sample several offsets
+        for offset in [0, FRAME_SIZE // 2, FRAME_SIZE - 2]:
+            assert data[offset : offset + 2] == expected, (
+                f"Pixel at offset {offset} doesn't match red after pygame fill"
+            )
+
+    def test_pygame_clear_after_image(self):
+        """Render an image then clear to black, confirming the full
+        round-trip: pygame render → framebuffer write → read-back."""
+        splash = self.ASSETS_DIR / "splash_320x240.png"
+        if not splash.exists():
+            pytest.skip("Splash image not available")
+
+        self._display_image("splash_320x240.png")
+        time.sleep(0.3)
+
+        # Now clear
+        self.screen.fill((0, 0, 0))
+        _surface_to_fb(self.screen)
+        time.sleep(0.3)
+
+        data = self._read_fb()
+        assert data == b"\x00" * FRAME_SIZE, (
+            "Framebuffer is not all black after pygame clear"
+        )

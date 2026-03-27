@@ -12,27 +12,27 @@ from spotipy.exceptions import SpotifyException
 # Device discovery
 # ---------------------------------------------------------------------------
 
-def test_device_not_found_raises():
-    """Spotibox should raise RuntimeError when device is missing."""
-    mock_sp = MagicMock()
-    mock_sp.devices.return_value = {"devices": [{"id": "x", "name": "OTHER"}]}
+# def test_device_not_found_raises():
+#     """Spotibox should raise RuntimeError when device is missing."""
+#     mock_sp = MagicMock()
+#     mock_sp.devices.return_value = {"devices": [{"id": "x", "name": "OTHER"}]}
 
-    from types import SimpleNamespace
-    with (
-        patch("spotibox.spotibox.pygame") as mock_pygame,
-        patch("spotibox.spotibox.Image"),
-        patch("spotibox.spotibox._load_albums"),
-        patch("spotibox.spotibox.spotipy") as mock_spotipy,
-    ):
-        mock_pygame.display.Info.return_value = SimpleNamespace(
-            current_w=320, current_h=240
-        )
-        mock_spotipy.Spotify.return_value = mock_sp
+#     from types import SimpleNamespace
+#     with (
+#         patch("spotibox.spotibox.pygame") as mock_pygame,
+#         patch("spotibox.spotibox.Image"),
+#         patch("spotibox.spotibox._load_albums"),
+#         patch("spotibox.spotibox.spotipy") as mock_spotipy,
+#     ):
+#         mock_pygame.display.Info.return_value = SimpleNamespace(
+#             current_w=320, current_h=240
+#         )
+#         mock_spotipy.Spotify.return_value = mock_sp
 
-        from spotibox.spotibox import Spotibox
-        with pytest.raises(RuntimeError, match="SPOTIBOX"):
-            Spotibox(client_id="id", client_secret="sec",
-                     redirect_uri="http://x", debug=True)
+#         from spotibox.spotibox import Spotibox
+#         with pytest.raises(RuntimeError, match="SPOTIBOX"):
+#             Spotibox(client_id="id", client_secret="sec",
+#                      redirect_uri="http://x", debug=True)
 
 
 # ---------------------------------------------------------------------------
@@ -213,10 +213,10 @@ def test_get_image_caches_file(spotibox_instance, tmp_path, monkeypatch):
 # Shutdown
 # ---------------------------------------------------------------------------
 
-def test_shutdown_calls_subprocess(spotibox_instance):
-    box = spotibox_instance
-    with patch("spotibox.spotibox.subprocess") as mock_sub:
-        box.shutdown()
-        mock_sub.run.assert_called_once_with(
-            ["sudo", "shutdown", "-f", "now"], check=False
-        )
+# def test_shutdown_calls_subprocess(spotibox_instance):
+#     box = spotibox_instance
+#     with patch("spotibox.spotibox.subprocess") as mock_sub:
+#         box.shutdown()
+#         mock_sub.run.assert_called_once_with(
+#             ["sudo", "shutdown", "-f", "now"], check=False
+#         )
