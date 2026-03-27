@@ -35,8 +35,60 @@ IDLE_TIMEOUT = 300   # seconds before idle-shutdown check
 FADE_TIMEOUT = 30    # seconds before backlight fade
 BACKLIGHT = Path("/sys/class/backlight/fb_ili9341/brightness")
 FPS = 30
-FB_DEVICE = Path("/dev/fb1")
 FB_WIDTH, FB_HEIGHT = 320, 240
+ILI9341_RESET_PIN = 24  # BCM pin wired to the ILI9341 RESET line
+
+
+def _find_ili9341_fb() -> Path | None:
+    """Return the ``/dev/fbN`` path backed by the *fb_ili9341* driver.
+
+    The fbtft driver can register on any ``/dev/fbN`` depending on boot
+    order (e.g. fb0 when no HDMI, fb1 when vc4-kms-v3d claims fb0).
+    We look at ``/proc/fb`` to find the right one.
+    """
+    proc_fb = Path("/proc/fb")
+    if not proc_fb.exists():
+        return None
+    for line in proc_fb.read_text().splitlines():
+        # Format: "0 fb_ili9341"
+        parts = line.split()
+        if len(parts) == 2 and parts[1] == "fb_ili9341":
+            return Path(f"/dev/fb{parts[0]}")
+    return None
+
+
+def _reset_ili9341() -> None:
+    """Pulse the ILI9341 hardware reset pin (active-low) via sysfs.
+
+    This forces the display controller to re-run its power-on init
+    sequence, which fixes blank/white screens caused by undervoltage
+    glitches during boot.
+    """
+    gpio = Path(f"/sys/class/gpio/gpio{ILI9341_RESET_PIN}")
+    export = Path("/sys/class/gpio/export")
+    unexport = Path("/sys/class/gpio/unexport")
+
+    # The pin is normally claimed by fbtft; if we can't export it the
+    # driver is in control and a reset isn't possible (or needed).
+    if not gpio.exists():
+        try:
+            export.write_text(str(ILI9341_RESET_PIN))
+            sleep(0.05)
+        except OSError:
+            return
+    try:
+        (gpio / "direction").write_text("out")
+        (gpio / "value").write_text("0")
+        sleep(0.15)
+        (gpio / "value").write_text("1")
+        sleep(0.15)
+    except OSError:
+        pass
+    finally:
+        try:
+            unexport.write_text(str(ILI9341_RESET_PIN))
+        except OSError:
+            pass
 
 
 def _load_albums() -> ModuleType:
@@ -68,10 +120,15 @@ class Spotibox:
         self.albums = _load_albums()
 
         # Display — target the ILI9341 SPI framebuffer
-        os.environ.setdefault("SDL_FBDEV", "/dev/fb1")
-        self._use_fb = FB_DEVICE.exists()
+        self._fb_device = _find_ili9341_fb()
+        self._use_fb = self._fb_device is not None
         if self._use_fb:
+            logger.info("Using framebuffer %s", self._fb_device)
+            os.environ.setdefault("SDL_FBDEV", str(self._fb_device))
             os.environ.setdefault("SDL_VIDEODRIVER", "offscreen")
+            # Clear the framebuffer to avoid stale/mangled pixels from a
+            # previous run or kernel console output.
+            self._fb_device.write_bytes(b"\x00" * (FB_WIDTH * FB_HEIGHT * 2))
         pygame.display.init()
         pygame.mouse.set_visible(False)
         if self._use_fb:
@@ -437,16 +494,22 @@ class Spotibox:
         if "album" in context_uri:
             total = playback["item"]["album"]["total_tracks"]
             current = playback["item"]["track_number"]
-        else:
+        elif "playlist" in context_uri:
             try:
                 playlist = self.sp.playlist(context_uri)
             except ReadTimeout:
                 logger.warning("API not reachable")
                 return
+            except SpotifyException as e:
+                logger.warning("Could not fetch playlist info: %s", e)
+                return
             pl_tracks = [i["track"]["uri"] for i in playlist["tracks"]["items"]]
             pb_track = playback["item"]["uri"]
             total = len(pl_tracks)
             current = pl_tracks.index(pb_track) + 1
+        else:
+            logger.debug("Cannot display track number for context: %s", context_uri)
+            return
 
         self._remove_boxes("left")
         self._draw_boxes(total, current, "left")
@@ -524,7 +587,7 @@ class Spotibox:
                 "<H", buf, i * 2,
                 ((b >> 3) << 11) | ((g >> 2) << 5) | (r >> 3),
             )
-        FB_DEVICE.write_bytes(buf)
+        self._fb_device.write_bytes(buf)
 
     # ------------------------------------------------------------------
     # Shutdown / signal handling

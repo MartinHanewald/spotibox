@@ -54,10 +54,54 @@ ${OVERLAY_LINE}
 EOF
 echo "[OK] Added fbtft overlay: ${OVERLAY_LINE}"
 
+# 3. Disable unused hardware to reduce power draw (helps prevent undervoltage)
+
+# Bluetooth — not used by Spotibox
+if grep -q "^dtoverlay=disable-bt" "$CONFIG"; then
+    echo "[OK] Bluetooth already disabled"
+else
+    echo "" >> "$CONFIG"
+    echo "# Disable unused hardware (reduce power draw / undervoltage)" >> "$CONFIG"
+    echo "dtoverlay=disable-bt" >> "$CONFIG"
+    echo "[OK] Bluetooth disabled"
+fi
+
+# HDMI — uses ~25 mA; not needed with the SPI display
+if grep -q "^dtoverlay=vc4-kms-v3d" "$CONFIG"; then
+    sed -i 's/^dtoverlay=vc4-kms-v3d/#dtoverlay=vc4-kms-v3d/' "$CONFIG"
+    echo "[OK] vc4-kms-v3d (HDMI) disabled"
+elif grep -q "^#dtoverlay=vc4-kms-v3d" "$CONFIG"; then
+    echo "[OK] vc4-kms-v3d (HDMI) already disabled"
+fi
+
+# Camera auto-detect — not used
+if grep -q "^camera_auto_detect=1" "$CONFIG"; then
+    sed -i 's/^camera_auto_detect=1/camera_auto_detect=0/' "$CONFIG"
+    echo "[OK] Camera auto-detect disabled"
+else
+    echo "[OK] Camera auto-detect already off"
+fi
+
+# DSI display auto-detect — not used (we use SPI)
+if grep -q "^display_auto_detect=1" "$CONFIG"; then
+    sed -i 's/^display_auto_detect=1/display_auto_detect=0/' "$CONFIG"
+    echo "[OK] DSI display auto-detect disabled"
+else
+    echo "[OK] DSI display auto-detect already off"
+fi
+
+# 4. Disable Bluetooth service
+if systemctl is-enabled bluetooth &>/dev/null; then
+    systemctl disable bluetooth
+    echo "[OK] Bluetooth service disabled"
+else
+    echo "[OK] Bluetooth service already disabled"
+fi
+
 echo ""
 echo "Current display config in ${CONFIG}:"
 echo "------"
-grep -A1 "ILI9341" "$CONFIG"
+grep -E "ILI9341|disable-bt|act_led|camera_auto|display_auto|vc4-kms" "$CONFIG" | head -20
 echo "------"
 echo ""
 echo "Reboot required to apply changes:"

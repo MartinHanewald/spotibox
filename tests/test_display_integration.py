@@ -1,8 +1,8 @@
-"""Integration test for the ILI9341 SPI display on /dev/fb1.
+"""Integration test for the ILI9341 SPI display.
 
 This test writes directly to the framebuffer and verifies the display
 is accessible. It requires the physical display to be connected and
-the fbtft driver loaded (i.e. /dev/fb1 must exist).
+the fbtft driver loaded (the fb_ili9341 device must exist).
 
 Run with:  uv run pytest tests/test_display_integration.py -v
 """
@@ -14,9 +14,23 @@ from pathlib import Path
 
 import pytest
 
-FB_DEVICE = Path("/dev/fb1")
 WIDTH, HEIGHT = 320, 240
 FRAME_SIZE = WIDTH * HEIGHT * 2  # RGB565 = 2 bytes per pixel
+
+
+def _find_ili9341_fb() -> Path | None:
+    """Return the ``/dev/fbN`` path backed by the *fb_ili9341* driver."""
+    proc_fb = Path("/proc/fb")
+    if not proc_fb.exists():
+        return None
+    for line in proc_fb.read_text().splitlines():
+        parts = line.split()
+        if len(parts) == 2 and parts[1] == "fb_ili9341":
+            return Path(f"/dev/fb{parts[0]}")
+    return None
+
+
+FB_DEVICE = _find_ili9341_fb() or Path("/dev/fb_missing")
 
 
 def rgb565(r: int, g: int, b: int) -> bytes:
