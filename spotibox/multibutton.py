@@ -1,10 +1,14 @@
+from __future__ import annotations
+
+import logging
+from collections.abc import Callable
 from functools import wraps
-from signal import pause
-from time import sleep
 
 from gpiozero import Button, ButtonBoard
 from gpiozero.devices import CompositeDevice
 from gpiozero.mixins import HoldMixin
+
+logger = logging.getLogger(__name__)
 
 
 class MultiButton(Button):
@@ -12,7 +16,7 @@ class MultiButton(Button):
     def __init__(
             self, pin=None, pull_up=True, active_state=None, bounce_time=None,
             hold_time=1, hold_repeat=False, pin_factory=None, parent=None):
-        super(MultiButton, self).__init__(
+        super().__init__(
             pin, pull_up=True, active_state=None, bounce_time=None,
             hold_time=1, hold_repeat=False, pin_factory=None)
         self.parent = parent
@@ -106,9 +110,8 @@ class MultiButtonBoard(HoldMixin, CompositeDevice):
         pin_factory = kwargs.pop('pin_factory', None)
         order = kwargs.pop('_order', None)
         self.callbacks = kwargs.pop('callbacks', None)
-        print(self.callbacks)
 
-        super(MultiButtonBoard, self).__init__(
+        super().__init__(
             *(
                 MultiButton(pin, pull_up=pull_up, active_state=active_state,
                             bounce_time=bounce_time, hold_time=hold_time,
@@ -146,20 +149,16 @@ class MultiButtonBoard(HoldMixin, CompositeDevice):
         self.hold_time = hold_time
         self.hold_repeat = hold_repeat
 
-    def choose_callback(self, parent):
+    def choose_callback(self, parent) -> None:
         v1 = parent.pin1.value
         v2 = parent.pin2.value
 
         if v1 and not v2:
             self.callbacks[0]()
-
-        if v2 and not v1:
+        elif v2 and not v1:
             self.callbacks[1]()
-
-        if v1 and v2:
+        elif v1 and v2:
             self.callbacks[2]()
-
-        # sleep(.2)
 
     @property
     def pull_up(self):
@@ -175,16 +174,14 @@ class MultiButtonBoard(HoldMixin, CompositeDevice):
 
     @when_changed.setter
     def when_changed(self, value):
-        # print('when_changed')
         self._when_changed = self._wrap_callback(value)
-        print(self._when_changed)
 
     def _fire_changed(self):
         if self.when_changed:
             self.when_changed()
 
     def _fire_events(self, ticks, new_value):
-        super(MultiButtonBoard, self)._fire_events(ticks, new_value)
+        super()._fire_events(ticks, new_value)
         old_value, self._last_value = self._last_value, new_value
         if old_value is None:
             # Initial "indeterminate" value; don't do anything
