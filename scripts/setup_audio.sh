@@ -152,6 +152,36 @@ fi
 echo ""
 
 # -----------------------------------------------------------
+# 5. Set ALSA volume to maximum (full software control via Spotify)
+# -----------------------------------------------------------
+echo "--- Step 5: Set ALSA volume to 100% ---"
+
+if amixer -c wm8960soundcard sset Speaker 100% &>/dev/null; then
+    echo "[OK] Speaker volume set to 100%"
+else
+    echo "[WARN] Could not set Speaker volume — sound card may not be ready yet"
+fi
+
+if amixer -c wm8960soundcard sset Playback 100% &>/dev/null; then
+    echo "[OK] Playback volume set to 100%"
+else
+    echo "[WARN] Could not set Playback volume"
+fi
+
+# Persist ALSA state so it survives reboot
+if command -v alsactl &>/dev/null; then
+    alsactl store &>/dev/null || true
+    echo "[OK] ALSA state saved"
+fi
+
+if systemctl is-active --quiet raspotify; then
+    echo "[OK] Raspotify service is active"
+else
+    echo "[WARN] Raspotify service may not be running — check: journalctl -u raspotify"
+fi
+echo ""
+
+# -----------------------------------------------------------
 # Summary
 # -----------------------------------------------------------
 echo "=== Audio Setup Complete ==="
