@@ -1,113 +1,156 @@
 #!/usr/bin/env python3
-"""GPIO button monitor — logs every button press in real time.
+"""Live GPIO button monitor using the unified SpotiboxButtons class.
 
-Listens on all configured spotibox GPIO pins and prints which button
-was pressed. Uses the same MultiButtonBoard setup as the real app so
-that combo presses (both pins simultaneously) are detected correctly.
-
-Press Ctrl+C to exit.
+Listens for all button presses and displays real-time debugging stats
+in a continuously-refreshing table.  Useful for verifying hardware
+wiring, debounce tuning, and combo detection on the Raspberry Pi.
 
 Usage:
     uv run python scripts/monitor_buttons.py
+    uv run python scripts/monitor_buttons.py --debounce 0.4 --combo-window 0.2
 """
 from __future__ import annotations
 
+import argparse
+import os
 import signal
 import sys
+import threading
 from datetime import datetime
+from time import monotonic, sleep
 
-from gpiozero import Button
+# Ensure the package is importable when running from the repo root
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from spotibox.multibutton import MultiButtonBoard
+from spotibox.buttons import SpotiboxButtons  # noqa: E402
 
-# Pin assignments (BCM) — must match spotibox/spotibox.py _setup_buttons()
-BUTTONPLAY1 = 4
-BUTTONPLAY2 = 27
-BUTTONPLAY3 = 22
-BUTTONPLAY4 = 5    # MultiButtonBoard 1 pin1
-BUTTONPLAY5 = 6    # MultiButtonBoard 1 pin2
-BUTTONPLAY6 = 13   # MultiButtonBoard 2 pin1
-BUTTONPAUSE = 26   # MultiButtonBoard 2 pin2
-BUTTONVOLUP = 14
-BUTTONVOLDOWN = 15
-BUTTONNEXT = 12
+# Ordered list of actions for the display table
+ACTIONS = [
+    "album1", "album2", "album3",
+    "album4", "album5", "album7",
+    "album6", "pause", "album8",
+    "vol_up", "vol_down", "next",
+]
+
+# Human-readable labels
+LABELS = {
+    "album1":   "PLAY1  (GPIO  4)   album1",
+    "album2":   "PLAY2  (GPIO 27)   album2",
+    "album3":   "PLAY3  (GPIO 22)   album3",
+    "album4":   "PLAY4  (GPIO  5)   album4        [combo1 A]",
+    "album5":   "PLAY5  (GPIO  6)   album5        [combo1 B]",
+    "album7":   "COMBO1 (GPIO 5+6)  album7        [both]",
+    "album6":   "PLAY6  (GPIO 13)   album6        [combo2 A]",
+    "pause":    "PAUSE  (GPIO 26)   pause/resume  [combo2 B]",
+    "album8":   "COMBO2 (GPIO13+26) album8        [both]",
+    "vol_up":   "VOLUP  (GPIO 14)   volume up",
+    "vol_down": "VOLDN  (GPIO 15)   volume down",
+    "next":     "NEXT   (GPIO 12)   next track",
+}
+
+# Recent event log
+_event_log: list[str] = []
+_log_lock = threading.Lock()
+MAX_LOG = 20
 
 
-def log(action: str) -> None:
+def _log_event(action: str) -> None:
     ts = datetime.now().strftime("%H:%M:%S.%f")[:-3]
-    print(f"  [{ts}]  {action}")
+    line = f"  [{ts}]  {action}"
+    with _log_lock:
+        _event_log.append(line)
+        if len(_event_log) > MAX_LOG:
+            _event_log.pop(0)
+
+
+def _clear_screen() -> None:
+    sys.stdout.write("\033[2J\033[H")
+    sys.stdout.flush()
+
+
+def _render(btns: SpotiboxButtons, start: float) -> None:
+    """Render the stats table and event log."""
+    _clear_screen()
+    snap = btns.stats.snapshot()
+    now = monotonic()
+
+    print("=" * 68)
+    print("  Spotibox Button Monitor  —  press Ctrl+C to exit")
+    print("=" * 68)
+    print()
+    print(f"  {'Action':<44s}  {'Count':>5s}  {'Ago':>7s}")
+    print(f"  {'-'*44}  {'-'*5}  {'-'*7}")
+
+    for action in ACTIONS:
+        label = LABELS.get(action, action)
+        info = snap.get(action, {"count": 0, "last": 0.0})
+        count = info["count"]
+        last = info["last"]
+        if last > 0:
+            ago = f"{now - last:6.1f}s"
+        else:
+            ago = "     —"
+        # Highlight recently-pressed actions
+        marker = " *" if last > 0 and (now - last) < 1.0 else "  "
+        print(f"{marker}{label:<44s}  {count:5d}  {ago}")
+
+    print()
+    uptime = now - start
+    print(f"  Uptime: {uptime:.0f}s   Total presses: "
+          f"{sum(s['count'] for s in snap.values())}")
+    print()
+    print("  — Recent events —")
+    with _log_lock:
+        if _event_log:
+            for line in _event_log:
+                print(line)
+        else:
+            print("  (no events yet)")
 
 
 def main() -> None:
-    print("=" * 60)
-    print("  Spotibox Button Monitor (with MultiButtonBoard)")
-    print("=" * 60)
-    print()
-    print("  Simple buttons:")
-    print(f"    GPIO {BUTTONPLAY1:2d} → PLAY1 (album1)")
-    print(f"    GPIO {BUTTONPLAY2:2d} → PLAY2 (album2)")
-    print(f"    GPIO {BUTTONPLAY3:2d} → PLAY3 (album3)")
-    print(f"    GPIO {BUTTONVOLUP:2d} → VOL UP")
-    print(f"    GPIO {BUTTONVOLDOWN:2d} → VOL DOWN")
-    print(f"    GPIO {BUTTONNEXT:2d} → NEXT")
-    print()
-    print("  MultiButtonBoard 1 (GPIO 5 + 6):")
-    print(f"    GPIO {BUTTONPLAY4:2d} only  → PLAY4 (album4)")
-    print(f"    GPIO {BUTTONPLAY5:2d} only  → PLAY5 (album5)")
-    print(f"    both          → PLAY7 (album7)")
-    print()
-    print("  MultiButtonBoard 2 (GPIO 13 + 26):")
-    print(f"    GPIO {BUTTONPLAY6:2d} only  → PLAY6 (album6)")
-    print(f"    GPIO {BUTTONPAUSE:2d} only  → PAUSE/RESUME")
-    print(f"    both          → PLAY8 (album8)")
-    print()
-    print("Press any button. Ctrl+C to exit.")
-    print("-" * 60)
+    parser = argparse.ArgumentParser(
+        description="Live GPIO button monitor with debugging stats",
+    )
+    parser.add_argument(
+        "--debounce", type=float, default=0.3,
+        help="Software debounce window in seconds (default: 0.3)",
+    )
+    parser.add_argument(
+        "--combo-window", type=float, default=0.15,
+        help="Combo detection window in seconds (default: 0.15)",
+    )
+    parser.add_argument(
+        "--refresh", type=float, default=0.25,
+        help="Screen refresh interval in seconds (default: 0.25)",
+    )
+    args = parser.parse_args()
 
-    # MultiButtonBoard 1: pins 5 + 6
-    mlt1 = MultiButtonBoard(
-        pin1=BUTTONPLAY4,
-        pin2=BUTTONPLAY5,
-        bounce_time=0.5,
-        callbacks=(
-            lambda: log("PLAY4  → album4        (multi1: pin1 only)"),
-            lambda: log("PLAY5  → album5        (multi1: pin2 only)"),
-            lambda: log("PLAY7  → album7        (multi1: BOTH pins)"),
-        ),
+    callbacks: dict[str, object] = {}
+    for action in ACTIONS:
+        # Capture action in closure
+        callbacks[action] = lambda a=action: _log_event(a)
+
+    btns = SpotiboxButtons(
+        callbacks,
+        debounce_s=args.debounce,
+        combo_window_s=args.combo_window,
     )
 
-    # MultiButtonBoard 2: pins 13 + 26
-    mlt2 = MultiButtonBoard(
-        pin1=BUTTONPLAY6,
-        pin2=BUTTONPAUSE,
-        bounce_time=0.5,
-        callbacks=(
-            lambda: log("PLAY6  → album6        (multi2: pin1 only)"),
-            lambda: log("PAUSE  → pause/resume  (multi2: pin2 only)"),
-            lambda: log("PLAY8  → album8        (multi2: BOTH pins)"),
-        ),
-    )
+    start = monotonic()
 
-    # Simple buttons
-    buttons = []
+    def handle_exit(*_):
+        btns.close()
+        _clear_screen()
+        print("Bye!")
+        sys.exit(0)
 
-    def make_simple(pin, name):
-        btn = Button(pin, bounce_time=0.05)
-        btn.when_pressed = lambda: log(name)
-        buttons.append(btn)
+    signal.signal(signal.SIGINT, handle_exit)
+    signal.signal(signal.SIGTERM, handle_exit)
 
-    make_simple(BUTTONPLAY1, "PLAY1  → album1")
-    make_simple(BUTTONPLAY2, "PLAY2  → album2")
-    make_simple(BUTTONPLAY3, "PLAY3  → album3")
-    make_simple(BUTTONVOLUP, "VOL UP")
-    make_simple(BUTTONVOLDOWN, "VOL DOWN")
-    make_simple(BUTTONNEXT, "NEXT")
-
-    # Keep references alive
-    _keep = [mlt1, mlt2, *buttons]
-
-    signal.signal(signal.SIGINT, lambda *_: sys.exit(0))
-    signal.pause()
+    while True:
+        _render(btns, start)
+        sleep(args.refresh)
 
 
 if __name__ == "__main__":

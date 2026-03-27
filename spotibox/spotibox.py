@@ -15,13 +15,12 @@ from types import ModuleType
 import pygame
 import requests
 import spotipy
-from gpiozero import Button
 from PIL import Image
 from requests import ReadTimeout
 from spotipy.exceptions import SpotifyException
 from spotipy.oauth2 import SpotifyOAuth
 
-from spotibox.multibutton import MultiButtonBoard
+from spotibox.buttons import SpotiboxButtons
 
 logger = logging.getLogger(__name__)
 
@@ -410,66 +409,22 @@ class Spotibox:
     # ------------------------------------------------------------------
 
     def _setup_buttons(self) -> None:
-        """Wire GPIO pins to playback handlers."""
-        # Pin assignments (BCM numbering)
-        BUTTONPLAY1 = 4
-        BUTTONPLAY2 = 27
-        BUTTONPLAY3 = 22
-        BUTTONPLAY4 = 5   # MultiButtonBoard 1 pin1
-        BUTTONPLAY5 = 6   # MultiButtonBoard 1 pin2
-        BUTTONPLAY6 = 13  # MultiButtonBoard 2 pin1
-        BUTTONPAUSE = 26  # MultiButtonBoard 2 pin2
-        BUTTONVOLUP = 14
-        BUTTONVOLDOWN = 15
-        BUTTONNEXT = 12
-        # Pins 19, 20, 21 are not used.
-
+        """Wire GPIO pins to playback handlers via SpotiboxButtons."""
         albums = self.albums
-
-        self._mltbtns1 = MultiButtonBoard(
-            pin1=BUTTONPLAY4,
-            pin2=BUTTONPLAY5,
-            bounce_time=0.5,
-            callbacks=(
-                lambda: self.playback(albums.album4),
-                lambda: self.playback(albums.album5),
-                lambda: self.playback(albums.album7),
-            ),
-        )
-
-        self._mltbtns2 = MultiButtonBoard(
-            pin1=BUTTONPLAY6,
-            pin2=BUTTONPAUSE,
-            bounce_time=0.5,
-            callbacks=(
-                lambda: self.playback(albums.album6),
-                self.pause_resume,
-                lambda: self.playback(albums.album8),
-            ),
-        )
-
-        buttonplay1 = Button(BUTTONPLAY1, bounce_time=0.05)
-        buttonplay1.when_pressed = lambda: self.playback(albums.album1)
-
-        buttonplay2 = Button(BUTTONPLAY2, bounce_time=0.05)
-        buttonplay2.when_pressed = lambda: self.playback(albums.album2)
-
-        buttonplay3 = Button(BUTTONPLAY3, bounce_time=0.05)
-        buttonplay3.when_pressed = lambda: self.playback(albums.album3)
-
-        buttonnext = Button(BUTTONNEXT, bounce_time=0.05)
-        buttonnext.when_pressed = self.next_track
-
-        buttonvolup = Button(BUTTONVOLUP, bounce_time=0.05)
-        buttonvolup.when_pressed = self.volume_up
-
-        buttonvoldown = Button(BUTTONVOLDOWN, bounce_time=0.05)
-        buttonvoldown.when_pressed = self.volume_down
-
-        # Keep references so callbacks aren't garbage-collected
-        self._buttons = [buttonplay1, buttonplay2, buttonplay3,
-                         buttonnext, buttonvolup, buttonvoldown]
-
+        self._spotibox_buttons = SpotiboxButtons({
+            "album1": lambda: self.playback(albums.album1),
+            "album2": lambda: self.playback(albums.album2),
+            "album3": lambda: self.playback(albums.album3),
+            "album4": lambda: self.playback(albums.album4),
+            "album5": lambda: self.playback(albums.album5),
+            "album6": lambda: self.playback(albums.album6),
+            "album7": lambda: self.playback(albums.album7),
+            "album8": lambda: self.playback(albums.album8),
+            "pause": self.pause_resume,
+            "vol_up": self.volume_up,
+            "vol_down": self.volume_down,
+            "next": self.next_track,
+        })
         self.reset_timer()
 
     # ------------------------------------------------------------------
