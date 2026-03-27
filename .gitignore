@@ -119,3 +119,5 @@ run.sh
 shutdown.sh
 temp.bmp
 sandbox/debug.py
+
+.cache

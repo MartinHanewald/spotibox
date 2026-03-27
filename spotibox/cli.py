@@ -3,8 +3,15 @@ from __future__ import annotations
 
 import logging
 import sys
+from pathlib import Path
 
 import click
+from dotenv import load_dotenv
+
+# Load .env from the current directory (if it exists) so that
+# SPOTIPY_CLIENT_ID, SPOTIPY_CLIENT_SECRET and SPOTIPY_REDIRECT_URI
+# are available as environment variables for Click's envvar lookup.
+load_dotenv(Path.cwd() / ".env")
 
 
 @click.command()

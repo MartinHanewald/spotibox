@@ -160,6 +160,12 @@ class MultiButtonBoard(HoldMixin, CompositeDevice):
         elif v1 and v2:
             self.callbacks[2]()
 
+    def _wrap_callback(self, fn):
+        @wraps(fn)
+        def wrapper():
+            return fn(self)
+        return wrapper
+
     @property
     def pull_up(self):
         """
