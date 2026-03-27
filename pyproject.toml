@@ -1,0 +1,84 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "spotibox"
+version = "0.2.0"
+description = "Spotify player for kids running on RaspberryPi with GPIO controls"
+readme = "README.rst"
+license = { text = "MIT" }
+authors = [{ name = "Martin Hanewald", email = "martin.hanewald@gmail.com" }]
+requires-python = ">=3.9"
+keywords = ["spotibox"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Natural Language :: English",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "click>=7.0",
+    "gpiozero",
+    "Pillow",
+    "pygame",
+    "requests",
+    "spotipy",
+]
+
+[project.urls]
+Homepage = "https://github.com/martinhanewald/spotibox"
+
+[project.scripts]
+spotibox = "spotibox.cli:main"
+
+[dependency-groups]
+dev = [
+    "bump2version",
+    "coverage",
+    "flake8",
+    "pytest>=3",
+    "Sphinx>=1.8",
+    "twine",
+    "watchdog",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["spotibox"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "AUTHORS.rst",
+    "CONTRIBUTING.rst",
+    "HISTORY.rst",
+    "LICENSE",
+    "README.rst",
+    "docs/",
+    "tests/",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.flake8]
+exclude = ["docs"]
+
+[tool.bumpversion]
+current_version = "0.2.0"
+commit = true
+tag = true
+
+[[tool.bumpversion.files]]
+filename = "pyproject.toml"
+search = 'version = "{current_version}"'
+replace = 'version = "{new_version}"'
+
+[[tool.bumpversion.files]]
+filename = "spotibox/__init__.py"
+search = '__version__ = "{current_version}"'
+replace = '__version__ = "{new_version}"'
