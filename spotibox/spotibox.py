@@ -64,7 +64,8 @@ class Spotibox:
     ) -> None:
         self.albums = _load_albums()
 
-        # Display
+        # Display — target the ILI9341 SPI framebuffer
+        os.environ.setdefault("SDL_FBDEV", "/dev/fb1")
         pygame.display.init()
         pygame.mouse.set_visible(False)
         self.displaysize = (
