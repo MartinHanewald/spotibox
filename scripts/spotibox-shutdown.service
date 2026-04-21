@@ -1,0 +1,21 @@
+[Unit]
+Description=Spotibox shutdown button (GPIO 26, hold 3s)
+After=multi-user.target
+# GPIO 26 is shared — only run when the main app is not active
+Conflicts=spotibox.service
+After=spotibox.service
+
+[Service]
+Type=simple
+User=admin
+Group=admin
+SupplementaryGroups=gpio
+
+WorkingDirectory=/home/admin/spotibox
+ExecStart=/home/admin/.local/bin/uv run python scripts/shutdown.py
+
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

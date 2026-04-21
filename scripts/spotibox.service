@@ -1,0 +1,39 @@
+[Unit]
+Description=Spotibox — Spotify player for kids
+After=network-online.target sound.target raspotify.service spotibox-monitor.service
+Wants=network-online.target sound.target spotibox-monitor.service
+Requires=raspotify.service
+
+[Service]
+Type=simple
+User=admin
+Group=admin
+SupplementaryGroups=video audio gpio spi i2c input
+
+WorkingDirectory=/home/admin/spotibox
+EnvironmentFile=/home/admin/spotibox/.env
+
+# Wait until both the ILI9341 framebuffer and WM8960 sound card are ready
+ExecStartPre=/bin/bash -c '\
+  for i in $(seq 1 30); do \
+    grep -q fb_ili9341 /proc/fb 2>/dev/null && break; \
+    echo "Waiting for ILI9341 framebuffer... ($i/30)"; \
+    sleep 1; \
+  done; \
+  grep -q fb_ili9341 /proc/fb || { echo "ILI9341 framebuffer not found"; exit 1; }'
+
+ExecStartPre=/bin/bash -c '\
+  for i in $(seq 1 30); do \
+    aplay -l 2>/dev/null | grep -q wm8960soundcard && break; \
+    echo "Waiting for WM8960 sound card... ($i/30)"; \
+    sleep 1; \
+  done; \
+  aplay -l 2>/dev/null | grep -q wm8960soundcard || { echo "WM8960 sound card not found"; exit 1; }'
+
+ExecStart=/home/admin/.local/bin/uv run spotibox
+
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

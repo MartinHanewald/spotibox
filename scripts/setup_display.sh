@@ -66,6 +66,18 @@ else
     echo "[OK] Bluetooth disabled"
 fi
 
+# Pololu mini power switch — drive GPIO16 high after halt to cut power
+if grep -q "^dtoverlay=gpio-poweroff,gpiopin=16" "$CONFIG"; then
+    echo "[OK] gpio-poweroff (GPIO16) already configured"
+else
+    sed -i '/^dtoverlay=gpio-poweroff/d' "$CONFIG"
+    sed -i '/^# Pololu mini power switch/d' "$CONFIG"
+    echo "" >> "$CONFIG"
+    echo "# Pololu mini power switch: drive GPIO16 high on shutdown to cut power" >> "$CONFIG"
+    echo "dtoverlay=gpio-poweroff,gpiopin=16" >> "$CONFIG"
+    echo "[OK] gpio-poweroff added (GPIO16)"
+fi
+
 # HDMI — uses ~25 mA; not needed with the SPI display
 if grep -q "^dtoverlay=vc4-kms-v3d" "$CONFIG"; then
     sed -i 's/^dtoverlay=vc4-kms-v3d/#dtoverlay=vc4-kms-v3d/' "$CONFIG"
@@ -101,7 +113,7 @@ fi
 echo ""
 echo "Current display config in ${CONFIG}:"
 echo "------"
-grep -E "ILI9341|disable-bt|act_led|camera_auto|display_auto|vc4-kms" "$CONFIG" | head -20
+grep -E "ILI9341|disable-bt|gpio-poweroff|Pololu|camera_auto|display_auto|vc4-kms" "$CONFIG" | head -20
 echo "------"
 echo ""
 echo "Reboot required to apply changes:"

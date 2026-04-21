@@ -196,6 +196,9 @@ class SpotiboxButtons:
         Seconds to wait for a second button in a combo pair.
     """
 
+    HOLD_SHUTDOWN_S = 3.0  # seconds to hold pause button for shutdown
+    HOLD_REBOOT_S = 3.0    # seconds to hold next button for reboot
+
     def __init__(
         self,
         callbacks: dict[str, Callable[[], None]],
@@ -226,6 +229,11 @@ class SpotiboxButtons:
             btn.when_pressed = lambda a=action, p=pin: self._on_simple(p, a)
             self._buttons.append(btn)
 
+        # Hold-to-reboot on the next-track button (last in simple_map)
+        next_btn = self._buttons[-1]  # PINS["next"]
+        next_btn.hold_time = self.HOLD_REBOOT_S
+        next_btn.when_held = self._on_hold_reboot
+
         # --- Combo button pairs ---
         self._combo1 = _ComboPair(
             pin_a=PINS["play4"],
@@ -250,6 +258,10 @@ class SpotiboxButtons:
             pin_factory=pin_factory,
         )
 
+        # Hold-to-shutdown on the pause button (GPIO 26)
+        self._combo2._btn_b.hold_time = self.HOLD_SHUTDOWN_S
+        self._combo2._btn_b.when_held = self._on_hold_shutdown
+
         logger.info(
             "SpotiboxButtons initialised — %d simple + 2 combo pairs",
             len(self._buttons),
@@ -266,6 +278,18 @@ class SpotiboxButtons:
             return
         self._last_press[pin] = now
         self._fire(action)
+
+    def _on_hold_shutdown(self) -> None:
+        logger.info("Pause button held for %ss — triggering shutdown", self.HOLD_SHUTDOWN_S)
+        cb = self._callbacks.get("shutdown")
+        if cb is not None:
+            cb()
+
+    def _on_hold_reboot(self) -> None:
+        logger.info("Next button held for %ss — triggering reboot", self.HOLD_REBOOT_S)
+        cb = self._callbacks.get("reboot")
+        if cb is not None:
+            cb()
 
     def _fire(self, action: str) -> None:
         logger.debug("Firing action: %s", action)

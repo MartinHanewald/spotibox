@@ -117,11 +117,19 @@ class Spotibox:
         redirect_uri: str | None = None,
         debug: bool = False,
     ) -> None:
+        logger.info("PHASE:init_start")
         self.albums = _load_albums()
+        logger.info("PHASE:albums_loaded")
 
         # Display — target the ILI9341 SPI framebuffer
+        logger.info("PHASE:display_probe_start")
         self._fb_device = _find_ili9341_fb()
         self._use_fb = self._fb_device is not None
+        logger.info(
+            "PHASE:display_probe_done use_fb=%s device=%s",
+            self._use_fb,
+            self._fb_device,
+        )
         if self._use_fb:
             logger.info("Using framebuffer %s", self._fb_device)
             os.environ.setdefault("SDL_FBDEV", str(self._fb_device))
@@ -129,7 +137,10 @@ class Spotibox:
             # Clear the framebuffer to avoid stale/mangled pixels from a
             # previous run or kernel console output.
             self._fb_device.write_bytes(b"\x00" * (FB_WIDTH * FB_HEIGHT * 2))
+            logger.info("PHASE:framebuffer_cleared device=%s", self._fb_device)
+        logger.info("PHASE:pygame_init_start")
         pygame.display.init()
+        logger.info("PHASE:pygame_init_done")
         pygame.mouse.set_visible(False)
         if self._use_fb:
             self.displaysize = (FB_WIDTH, FB_HEIGHT)
@@ -141,7 +152,14 @@ class Spotibox:
         self.screen = pygame.display.set_mode(
             self.displaysize, 0 if self._use_fb else pygame.FULLSCREEN
         )
+        logger.info(
+            "PHASE:screen_created size=%dx%d use_fb=%s",
+            self.displaysize[0],
+            self.displaysize[1],
+            self._use_fb,
+        )
         self.display_image("spotibox.PNG")
+        logger.info("PHASE:splash_shown")
         self.fps = pygame.time.Clock()
 
         self.current: dict | None = None
@@ -150,6 +168,7 @@ class Spotibox:
         self.debug = debug
 
         # Spotify auth
+        logger.info("PHASE:spotify_auth_start")
         scope = "user-read-playback-state,user-modify-playback-state"
         self.sp = spotipy.Spotify(
             client_credentials_manager=SpotifyOAuth(
@@ -159,8 +178,10 @@ class Spotibox:
                 redirect_uri=redirect_uri,
             )
         )
+        logger.info("PHASE:spotify_auth_done")
 
         # Device discovery
+        logger.info("PHASE:device_discovery_start")
         devs = self.sp.devices()
         try:
             self.target_id: str = next(
@@ -174,17 +195,21 @@ class Spotibox:
             )
 
         logger.info("Found device %s at %s.", DEVICE_NAME, self.target_id)
+        logger.info("PHASE:device_discovery_done device=%s", DEVICE_NAME)
 
         # Wait for playback state
+        logger.info("PHASE:playback_wait_start")
         while self.current is None:
             self.refresh_current()
             sleep(1)
+        logger.info("PHASE:playback_wait_done")
 
         logger.debug("Current playback state: %s", self.current)
         if self.current["is_playing"] and self.current.get("context"):
             self.display_image(self.get_image(self.current["context"]["uri"]))
             self.display_track_number()
             self.display_volume()
+        logger.info("PHASE:ready")
 
     # ------------------------------------------------------------------
     # Main event loop — call after __init__ to start the player
@@ -439,6 +464,11 @@ class Spotibox:
         pygame.display.quit()
         subprocess.run(["sudo", "shutdown", "-f", "now"], check=False)
 
+    def reboot(self) -> None:
+        logger.info("Rebooting...")
+        pygame.display.quit()
+        subprocess.run(["sudo", "reboot"], check=False)
+
     def display_image(self, filename: str) -> None:
         src = ASSETS_DIR / filename
         tmp = ASSETS_DIR / "temp.bmp"
@@ -481,6 +511,8 @@ class Spotibox:
             "vol_up": self.volume_up,
             "vol_down": self.volume_down,
             "next": self.next_track,
+            "shutdown": self.shutdown,
+            "reboot": self.reboot,
         })
         self.reset_timer()
 
