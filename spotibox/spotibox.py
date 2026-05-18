@@ -95,14 +95,23 @@ def _load_albums() -> ModuleType:
     """Load the albums module from the external mount or fall back to the
     bundled copy shipped with the package."""
     if ALBUMS_PATH.is_file():
-        spec = importlib.util.spec_from_file_location("albums", str(ALBUMS_PATH))
-        mod = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
-        spec.loader.exec_module(mod)  # type: ignore[union-attr]
-        return mod
+        try:
+            spec = importlib.util.spec_from_file_location("albums", str(ALBUMS_PATH))
+            mod = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+            spec.loader.exec_module(mod)  # type: ignore[union-attr]
+            return mod
+        except OSError as exc:
+            logger.warning(
+                "Failed to load %s (%s) — falling back to bundled spotibox.albums",
+                ALBUMS_PATH,
+                exc,
+            )
 
-    logger.warning(
-        "%s not found — falling back to bundled spotibox.albums", ALBUMS_PATH
-    )
+    else:
+        logger.warning(
+            "%s not found — falling back to bundled spotibox.albums", ALBUMS_PATH
+        )
+
     from spotibox import albums as mod  # type: ignore[assignment]
     return mod
 
@@ -495,18 +504,22 @@ class Spotibox:
     # GPIO setup
     # ------------------------------------------------------------------
 
+    def _get_album(self, name: str) -> str:
+        """Reload albums from disk and return the URI for the given slot."""
+        self.albums = _load_albums()
+        return getattr(self.albums, name)
+
     def _setup_buttons(self) -> None:
         """Wire GPIO pins to playback handlers via SpotiboxButtons."""
-        albums = self.albums
         self._spotibox_buttons = SpotiboxButtons({
-            "album1": lambda: self.playback(albums.album1),
-            "album2": lambda: self.playback(albums.album2),
-            "album3": lambda: self.playback(albums.album3),
-            "album4": lambda: self.playback(albums.album4),
-            "album5": lambda: self.playback(albums.album5),
-            "album6": lambda: self.playback(albums.album6),
-            "album7": lambda: self.playback(albums.album7),
-            "album8": lambda: self.playback(albums.album8),
+            "album1": lambda: self.playback(self._get_album("album1")),
+            "album2": lambda: self.playback(self._get_album("album2")),
+            "album3": lambda: self.playback(self._get_album("album3")),
+            "album4": lambda: self.playback(self._get_album("album4")),
+            "album5": lambda: self.playback(self._get_album("album5")),
+            "album6": lambda: self.playback(self._get_album("album6")),
+            "album7": lambda: self.playback(self._get_album("album7")),
+            "album8": lambda: self.playback(self._get_album("album8")),
             "pause": self.pause_resume,
             "vol_up": self.volume_up,
             "vol_down": self.volume_down,
