@@ -1,8 +1,10 @@
 [Unit]
 Description=Spotibox — Spotify player for kids
-After=network-online.target sound.target raspotify.service spotibox-monitor.service
-Wants=network-online.target sound.target spotibox-monitor.service
-Requires=raspotify.service
+After=sound.target spotibox-monitor.service
+Wants=sound.target spotibox-monitor.service
+Conflicts=spotibox-shutdown.service
+StartLimitIntervalSec=300
+StartLimitBurst=5
 
 [Service]
 Type=simple
@@ -12,6 +14,15 @@ SupplementaryGroups=video audio gpio spi i2c input
 
 WorkingDirectory=/home/admin/spotibox
 EnvironmentFile=/home/admin/spotibox/.env
+
+# Wait for network connectivity
+ExecStartPre=/bin/bash -c '\
+  for i in $(seq 1 30); do \
+    ip route get 1.1.1.1 >/dev/null 2>&1 && break; \
+    echo "Waiting for network... ($i/30)"; \
+    sleep 2; \
+  done; \
+  ip route get 1.1.1.1 >/dev/null 2>&1 || { echo "No network connectivity"; exit 1; }'
 
 # Wait until both the ILI9341 framebuffer and WM8960 sound card are ready
 ExecStartPre=/bin/bash -c '\
@@ -30,10 +41,19 @@ ExecStartPre=/bin/bash -c '\
   done; \
   aplay -l 2>/dev/null | grep -q wm8960soundcard || { echo "WM8960 sound card not found"; exit 1; }'
 
+# Wait for raspotify to be active (it may restart after initial failure)
+ExecStartPre=/bin/bash -c '\
+  for i in $(seq 1 60); do \
+    systemctl is-active raspotify.service >/dev/null 2>&1 && break; \
+    echo "Waiting for raspotify... ($i/60)"; \
+    sleep 2; \
+  done; \
+  systemctl is-active raspotify.service >/dev/null 2>&1 || { echo "raspotify not running"; exit 1; }'
+
 ExecStart=/home/admin/.local/bin/uv run spotibox
 
 Restart=on-failure
-RestartSec=5
+RestartSec=10
 
 [Install]
 WantedBy=multi-user.target

@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 # Constants
 # ---------------------------------------------------------------------------
 DEVICE_NAME = "SPOTIBOX"
-ALBUMS_PATH = Path("/mnt/albums/albums.py")
+ALBUMS_PATH = Path("/mnt/albums/Spotibox/albums.py")
 ASSETS_DIR = Path("assets")
 VOLUME_STEP = 10
 IDLE_TIMEOUT = 300   # seconds before idle-shutdown check
@@ -112,7 +112,12 @@ def _load_albums() -> ModuleType:
             "%s not found — falling back to bundled spotibox.albums", ALBUMS_PATH
         )
 
-    from spotibox import albums as mod  # type: ignore[assignment]
+    from spotibox import albums
+    spec = importlib.util.spec_from_file_location(
+        "albums", albums.__file__
+    )
+    mod = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+    spec.loader.exec_module(mod)  # type: ignore[union-attr]
     return mod
 
 

@@ -1,9 +1,6 @@
 [Unit]
 Description=Spotibox shutdown button (GPIO 26, hold 3s)
 After=multi-user.target
-# GPIO 26 is shared — only run when the main app is not active
-Conflicts=spotibox.service
-After=spotibox.service
 
 [Service]
 Type=simple
